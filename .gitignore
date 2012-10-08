@@ -1,1 +1,6 @@
 *.deb
+man/tex/*.aux
+man/tex/*.toc
+man/tex/*.log
+man/tex/*.out
+man/tex/*.pdf

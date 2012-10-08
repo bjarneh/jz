@@ -34,6 +34,7 @@
   -d --doc      :  path to produced javadoc (default: doc)
   -L --lib      :  path to library dir added to -classpath (default: lib)
   -j --jardir   :  path to dir where jar file is placed (default: dst)
+  -z --resdir   :  path to dir which is included in jar-file (default: res)
   -n --name     :  name of jar file containing project (default: a.jar)
   -o --output   :  produce an executable shell-script containing the project
   -m --main     :  name of entry point class for stand alone execution
@@ -78,6 +79,7 @@ config['-class']     = 'obj'
 config['-doc']       = 'doc'
 config['-lib']       = 'lib'
 config['-jardir']    = 'dst'
+config['-resdir']    = 'res'
 config['-name']      = 'a.jar'
 config['-main']      = ''
 config['-manifest']  = ''
@@ -252,13 +254,14 @@ def parse_argv(argv):
     p.add_str_fancy("-r --root")
     p.add_str_fancy("-C --class")
     p.add_str_fancy("-j --jardir")
+    p.add_str_fancy("-z --resdir")
     p.add_str_fancy("-L --lib")
+    p.add_str_fancy("-d --doc")
     p.add_str_fancy("-n --name")
     p.add_str_fancy("-o --output")
     p.add_str_fancy("-m --main")
     p.add_str_fancy("-M --manifest")
     p.add_str_fancy("-cp -classpath")
-    p.add_str("-d") # do not allow user to give this arg. (we are giving it)
 
     args = p.parse(argv)
     if args: config['extra_args'] += args
@@ -266,7 +269,8 @@ def parse_argv(argv):
     for o in ['-help','-version','-quiet','-clean','-test','-list','-javadoc','-include']:
         if p.is_set(o): config[o] = True
 
-    for o in ['-exclude','-root','-class','-jardir','-lib','-classpath','-name','-main','-manifest','-output']:
+    for o in ['-exclude','-root','-class','-jardir','-lib','-resdir',
+              '-classpath','-name','-main','-manifest','-output','-doc']:
         if p.is_set(o): config[o] = p.get(o)
 
 
@@ -343,7 +347,7 @@ def javac(files):
     if fail: die("compile failed")
 
 
-def clean_obj_dst():
+def clean():
     """ remove config['-class'] config['-jardir'] config['-doc'] if present """
 
     rm_dir_and_its_empty_parents(config['-doc'])
@@ -393,7 +397,6 @@ def junit_sanity():
         err("[ERROR] the %s directory, before you run unit tests\n\n"%(config['-lib']))
         sys.exit(1)
    
-
 
 def junit():
     """ run junit tests if junit is present in -classpath """
@@ -611,7 +614,7 @@ def javadoc():
 
     if not which('javadoc'): die("javadoc - command not found")
 
-    files = path_walk(config['-root'], java_matcher)
+    files = path_walk(config['-root'], java_no_test_matcher)
     update_classpath()
 
     cmd = []
@@ -633,7 +636,7 @@ def add_libs(jar_name):
 
     junit_regex = re.compile(r".*junit[0-9\-\.]*\.jar$")
 
-    if not jar_name: return
+    if not jar_name: return # FIXME can I safely do this?
 
     jar_fd = zipfile.ZipFile(jar_name, 'a')
 
@@ -641,9 +644,13 @@ def add_libs(jar_name):
         m = junit_regex.match(f)
         if m: continue # skip junit
         zip_fd = zipfile.ZipFile(f, 'r')
+        if not config['-quiet']: print "add 2 zip: %s" % f
         names  = zip_fd.namelist()
         for n in names:
-            if n.endswith('.class'):
+            # add class files + any other file which is not
+            # a MANIFEST.MF file, some libs have important
+            # files stuffed into them (mysql.jar for instance)
+            if not n.endswith('MANIFEST.MF'):
                 b = zip_fd.read(n)
                 jar_fd.writestr(n, b)
         zip_fd.close()
@@ -651,16 +658,52 @@ def add_libs(jar_name):
     jar_fd.close()
 
 
+def add_resources(jar_name):
+    """ add everything in config['-resdir'] to jar-file """
+
+    if not jar_name: return # FIXME can I safely do this?
+    if not os.path.isdir(config['-resdir']): return
+
+    jar_fd = zipfile.ZipFile(jar_name, 'a')
+
+    if not config['-quiet']:
+        print "add 2 zip: %s"% config['-resdir']
+
+    for f in path_walk(config['-resdir'], any_matcher):
+        jar_fd.write(f, f[len(config['-resdir'])+1:])
+
+    jar_fd.close()
+
+
+#TODO FIXME when libs become multiple argument option
 def normalize_paths():
     """ just make sure we remove added / or // etc"""
-    for e in ['-root','-class','-doc','-lib','-jardir']:
+    for e in ['-root','-class','-doc','-lib','-jardir','-resdir']:
         config[e] = os.path.normpath(config[e])
+
+
+def build():
+    """ javac, jar and possibly make bash-script """
+    t0 = time.time() # do some timing
+    javac(path_walk(config['-root'], java_no_test_matcher))
+    if config['-output']: assert_main_class()
+    jar_name = zip_classes(check_time_stamp=True)
+    add_resources(jar_name)
+    if config['-include'] or config['-output']:
+        add_libs(jar_name)
+    if config['-output']:
+        bash_script(jar_name)
+    if jar_name: # this indicates that something was compiled
+        sys.stderr.write("time used: %.3fs\n"%( time.time() - t0 ))
+
 
 # lambda's
 def java_matcher(f): return f.endswith('.java')
 def java_no_test_matcher(f): return java_matcher(f) and not f.endswith('Test.java')
 def class_matcher(f): return f.endswith('.class')
 def jar_matcher(f): return f.endswith('.jar')
+def any_matcher(f): return True
+
 
 
 def main():
@@ -676,23 +719,13 @@ def main():
     normalize_paths()
 
     if config['-clean']:
-        clean_obj_dst()
+        clean()
     elif config['-test']:
         junit()
     elif config['-javadoc']:
         javadoc()
     else:
-        t0 = time.time() # do some timing
-        javac(path_walk(config['-root'], java_no_test_matcher))
-        if config['-output']: assert_main_class()
-        jar_name = zip_classes(check_time_stamp=True)
-        if config['-include'] or config['-output']:
-            add_libs(jar_name)
-        if config['-output']:
-            bash_script(jar_name)
-        if jar_name: # this indicates that something was compiled
-            sys.stderr.write("time used: %.3fs\n"%( time.time() - t0 ))
-
+        build()
 
 # ______________________________________________________________ utility
 
