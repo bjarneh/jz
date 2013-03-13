@@ -1,20 +1,41 @@
 #!/usr/bin/env python
 # -*- encoding: utf-8 -*-
+# ______________________________________________________________________
+#
+#  Copyright © 2013 bjarneh
+#
+#  This program is free software: you can redistribute it and/or modify
+#  it under the terms of the GNU General Public License as published by
+#  the Free Software Foundation, either version 3 of the License, or
+#  (at your option) any later version.
+#
+#  This program is distributed in the hope that it will be useful,
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#  GNU General Public License for more details.
+#
+#  You should have received a copy of the GNU General Public License
+#  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#
+# ______________________________________________________________________
+#
+#  The program is organized into these sections:
+# 
+#  0. __doc__ [-help menu]
+#  1. global variables
+#  2. templates
+#  3. program functions
+#  4. main
+#  5. Pkg [represents a java package]
+#  6. Lib [represents a java library]
+#  7. utility functions
+#  8. Pyopt [command line parser]
+#  9. init
+#
+#  The main function should give you a good idea of the program flow.
+#  Each section is devided with a horizontal line of underscores.
+# ______________________________________________________________________
 
-##  Copyright © 2012 bjarneh
-##
-##  This program is free software: you can redistribute it and/or modify
-##  it under the terms of the GNU General Public License as published by
-##  the Free Software Foundation, either version 3 of the License, or
-##  (at your option) any later version.
-##
-##  This program is distributed in the hope that it will be useful,
-##  but WITHOUT ANY WARRANTY; without even the implied warranty of
-##  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-##  GNU General Public License for more details.
-##
-##  You should have received a copy of the GNU General Public License
-##  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 """
  jc - java build tool without the XML
@@ -26,71 +47,119 @@
   -h --help     :  print this menu and exit
   -v --version  :  print version and exit
   -l --list     :  list command line options current value
-  -E --exclude  :  dirnames to exclude (default: .svn,.hg,.git,.bzr)
-  -c --clean    :  rm -rf obj/ dst/ doc/ (see: -class -doc -jardir)
-  -t --test     :  run unit-tests (requires junit.jar in -classpath)
-  -r --root     :  path to a source root (default: src)
-  -C --class    :  path to produced class-files (default: obj)
-  -d --doc      :  path to produced javadoc (default: doc)
+  -x --strip    :  dirnames to exclude (default: .svn,.hg,.git,.bzr)
+  -u --dep      :  print dependency information gathered
+  -z --zlib     :  compress zip-files (jar-archives) with zlib
+  -f --full     :  compile entire project, not only modified files
+  -c --clean    :  remove class-files, jar-file, and javadoc html
+  -t --test     :  run unit-tests using junit (will be downloaded)
+  -S --src      :  path to a source root (default: src)
+  -O --obj      :  path to produced class-files (default: obj)
+  -H --htm      :  path to produced javadoc (default: htm)
   -L --lib      :  path to library dir added to -classpath (default: lib)
-  -j --jardir   :  path to dir where jar file is placed (default: dst)
-  -z --resdir   :  path to dir which is included in jar-file (default: res)
+  -D --dst      :  path to dir where jar file is placed (default: dst)
+  -R --res      :  path to dir which is included in jar-file (default: res)
+  -p --pack     :  include dependency libs to produce a stand alone jar
+  -d --doc      :  produce javadoc for project, with some sane defaults
+  -N --nolink   :  do not add '-linksource' argument for javadoc
   -n --name     :  name of jar file containing project (default: a.jar)
   -o --output   :  produce an executable shell-script containing the project
   -m --main     :  name of entry point class for stand alone execution
   -M --manifest :  path to (complete) manifest for the generated jar file
-  -i --include  :  include dependency libs to produce a stand alone jar
-  -x --javadoc  :  produce javadoc for project, with some sane defaults
+  --classpath   :  locations of user class files and annotation processors
+  --javahome    :  location of jdk, or chosen jdk to use to compile src
 
-  NOTE: any valid 'javac' option except '-d' can be given
+  NOTE: valid 'javac/javadoc' options can be given
 """
 
-#javadoc -classpath lib/junit.jar -linksource -d doc -link http://docs.oracle.com/javase/6/docs/api/
+
+# javadoc\
+# -classpath lib/junit.jar\
+# -linksource -d doc\
+# -link http://docs.oracle.com/javase/6/docs/api/
+
+# ______________________________________________________________ imports
+
+
+import os         # os independent?
+import re         # parse with regexp
+import sys        # printing/argv/exit
+import time       # do some basic timing
+import atexit     # delete tmp files on exit
+#import urllib2   # moved to 'wget' [adds overhead]
+import zipfile    # write zip (jar) files
+#import cProfile  # run profile tool
+import traceback  # print stacktrace
+import subprocess # run external commands
+
+
+# ______________________________________________________________ globals
 
 __version__    = "jc 1.0"
 __author__     = "bjarneh@ifi.uio.no"
 
 
-import os
-import re
-import sys
-import time
-import atexit
-import zipfile
-import traceback
-import subprocess
-
-
 # ------------------------------------------------------ 
-# Globals can be overridden by command line arguments
+# config can be overridden by command line arguments
 # ------------------------------------------------------ 
-config = {}
-config['-help']      = False
-config['-version']   = False
-config['-quiet']     = False
-config['-clean']     = False
-config['-test']      = False
-config['-include']   = False
-config['-list']      = False
-config['-javadoc']   = False
-config['-exclude']   = '.svn,.git,.hg,.bzr'
-config['-root']      = 'src'
-config['-class']     = 'obj'
-config['-doc']       = 'doc'
-config['-lib']       = 'lib'
-config['-jardir']    = 'dst'
-config['-resdir']    = 'res'
-config['-name']      = 'a.jar'
-config['-main']      = ''
-config['-manifest']  = ''
-config['-output']    = ''
-config['-classpath'] = ''
-config['extra_args'] = []
 
 
-# this is the junit template that runs the
-# unit tests, not an optimal setup perhaps
-java_template = """// generated
+config = {} # command line + config-file options
+config['-src']        = 'src' # -S
+config['-obj']        = 'obj' # -O
+config['-htm']        = 'htm' # -H
+config['-res']        = 'res' # -R
+config['-lib']        = 'lib' # -L
+config['-dst']        = 'dst' # -D
+config['-name']       = 'a.jar' # -n
+config['-strip']      = '.hg,.git,.svn,.bzr' # -s
+config['-javahome']   = os.environ.get('JAVA_HOME')
+config['-classpath']  = os.environ.get('CLASSPATH')
+config['-link']       = 'http://docs.oracle.com/javase/6/docs/api/' 
+config['-main']       = None
+config['-manifest']   = None
+config['-output']     = None  # -o
+config['-nolink']     = False # -N
+config['-full']       = False # -f
+config['-pack']       = False # -p
+config['-doc']        = False # -d
+config['-dep']        = False # -u
+config['-clean']      = False # -c
+config['-test']       = False # -t
+config['-help']       = False # -h
+config['-list']       = False # -l
+config['-zlib']       = False # -z
+config['-dryrun']     = False #
+config['-quiet']      = False # -q
+config['-version']    = False # -v
+config['windows']     = sys.platform.startswith('win')
+config['xargs']       = []
+
+
+# use regexp to parse files ☻
+## pkg_regex   = re.compile(r"""^\s*package\s+([\w.\-_\d]+);$""")
+## imprt_regex = re.compile(r"""^\s*import\s+([\w.\-_\d]+)\.[^\.]+$""")
+pkg_regex   = re.compile(r"""package\s+([\w.\-_\d]+);""")
+imprt_regex = re.compile(r"""import\s+([\w.\-_\d]+)\.[^\.;]+;""")
+imprt2_regx = re.compile(r"""import\s+static\s+([\w.\-_\d]+)\.[\w.\-_\d]+\.[^\.;]+;""")
+stop_regex  = re.compile(r"""^\s*(final|public|class|interface|enum)\s+.*$""")
+# main regex will match (args can be argv as well)
+# 1: public static void main(String[] args)
+# 2: public static void main(String args[])
+# 3: public static void main(String... args)
+main_start  = r"""public\s+static\s+void\s+main\s*\("""
+main_stop   = r"""String(\[\]\s+arg(s|v)|\s+arg(v|s)\[\]|\s*\.\.\.\s+arg(s|v))\s*\)"""
+main_regex  = re.compile(main_start + main_stop)
+# regexp to look for junit library
+junit_regex = re.compile(r"""junit[\d\-.]*\.jar""")
+
+# command line parser
+pyopt = None
+
+# ______________________________________________________________ templates
+
+# junit template to run the unit tests
+junit_template = """// generated
 package com.github.bjarneh.jc;
 
 import java.io.File;
@@ -138,7 +207,6 @@ public class JcTestRunner {
 }
 """
 
-
 bash_template = """#!/bin/bash
 
 function die() {
@@ -168,46 +236,90 @@ exec java -jar $0 "$@"
 
 """
 
+# ______________________________________________________________ program funcs
 
-def path_walk(dir_name, criteria):
-    """
-    traverse config['-root'] dir in search of *.java files
-    """
+def init_parser():
+    """ initialize option parser """
 
-    collected = []
+    # you see Perl; a few 'global' or a million 'my'?
+    global pyopt
 
-    # We ignore .svn/.bzr/.hg/.git by default
-    ignore_dirs = config['-exclude'].split(',')
+    pyopt = Pyopt()
+    pyopt.add_bool('-h -help --help help')
+    pyopt.add_bool('-v -version --version')
+    pyopt.add_bool('-c -clean --clean clean')
+    pyopt.add_bool('-q -quiet --quiet')
+    pyopt.add_bool('-z -zlib --zlib')
+    pyopt.add_bool('-dryrun --dryrun')
+    pyopt.add_bool('-d -doc --doc')
+    pyopt.add_bool('-u -dep --dep')
+    pyopt.add_bool('-f -full --full')
+    pyopt.add_bool('-l -list --list')
+    pyopt.add_bool('-p -pack --pack')
+    pyopt.add_bool('-N -nolink --nolink')
+    pyopt.add_bool('-t -test --test test')
+    pyopt.add_str_fancy('--javahome')
+    pyopt.add_str_fancy('-x --strip')
+    pyopt.add_str_fancy('-S --src')
+    pyopt.add_str_fancy('-O --obj')
+    pyopt.add_str_fancy('-H --htm')
+    pyopt.add_str_fancy('-R --res')
+    pyopt.add_str_fancy('-L --lib')
+    pyopt.add_str_fancy('-D --dst')
+    pyopt.add_str_fancy('-M --main')
+    pyopt.add_str_fancy('-n --name')
+    pyopt.add_str_fancy('-m --manifest')
+    pyopt.add_str_fancy('--link')
+    pyopt.add_str_fancy('-o --output')
+    pyopt.add_str_fancy('--javahome')
+    pyopt.add_str_fancy('--classpath')
 
-    for root, dirs, files in os.walk(dir_name):
-        # do not look in repository dires (.git,.svn ..)
-        if dirs:
-            for ign in ignore_dirs:
-                if ign in dirs: dirs.remove(ign)
-        if files:
-            for f in files:
-                if criteria(f):
-                    collected.append(os.path.join(root, f))
 
-    return collected
+def parse_args( argv ):
+    """ parse command line arguments || config file """
+    
+    rest = pyopt.parse( argv )
 
+    if pyopt.is_set('-help')   : config['-help']    = True
+    if pyopt.is_set('-test')   : config['-test']    = True
+    if pyopt.is_set('-doc')    : config['-doc']     = True
+    if pyopt.is_set('-clean')  : config['-clean']   = True
+    if pyopt.is_set('-dryrun') : config['-dryrun']  = True
+    if pyopt.is_set('-version'): config['-version'] = True
+    if pyopt.is_set('-quiet')  : config['-quiet']   = True
+    if pyopt.is_set('-zlib')   : config['-zlib']    = True
+    if pyopt.is_set('-dep')    : config['-dep']     = True
+    if pyopt.is_set('-list')   : config['-list']    = True
+    if pyopt.is_set('-full')   : config['-full']    = True
+    if pyopt.is_set('-pack')   : config['-pack']    = True
+    if pyopt.is_set('-nolink') : config['-nolink']  = True
 
-def config_to_argv(fname):
-    """
-    if fname is a file strip comments + split on whitespace
-    this function will be praised by Donald Knuth because of
-    its low complexity etc.
-    """
-    if os.path.isfile(fname):
-        cmt_strip = re.compile(r'#.*$')
-        actual_lines = []
-        fd = open(fname, 'r')
-        for line in fd.readlines():
-            clean_line = cmt_strip.sub('',line).strip()
-            if clean_line: actual_lines.append( clean_line )
-        if actual_lines: # auch
-            return ' '.join(actual_lines).split()
-    return None
+    if pyopt.is_set('-src'): config['-src'] = pyopt.get('-src')
+    if pyopt.is_set('-obj'): config['-obj'] = pyopt.get('-obj')
+    if pyopt.is_set('-htm'): config['-htm'] = pyopt.get('-htm')
+    if pyopt.is_set('-res'): config['-res'] = pyopt.get('-res')
+    if pyopt.is_set('-lib'): config['-lib'] = pyopt.get('-lib')
+    if pyopt.is_set('-dst'): config['-dst'] = pyopt.get('-dst')
+    if pyopt.is_set('-main'): config['-main'] = pyopt.get('-main')
+    if pyopt.is_set('-name'): config['-name'] = pyopt.get('-name')
+    if pyopt.is_set('-link'): config['-link'] = pyopt.get('-link')
+    if pyopt.is_set('-strip'): config['-strip'] = pyopt.get('-strip')
+    if pyopt.is_set('-output'): config['-output'] = pyopt.get('-output')
+    if pyopt.is_set('-javahome'): config['-javahome'] = pyopt.get('-javahome')
+    if pyopt.is_set('-manifest'): config['-manifest'] = pyopt.get('-manifest')
+
+    # somewhat special, append if not empty CLASSPATH variable on init
+    if pyopt.is_set('--classpath'):
+        if config['-classpath']:
+            config['-classpath'] += os.pathsep + pyopt.get('-classpath')
+        else:
+            config['-classpath'] = pyopt.get('-classpath')
+
+    if rest: config['xargs'] += rest
+
+    pyopt.reset() # reset all options to False or None
+
+    return rest
 
 
 def parse_config():
@@ -224,151 +336,333 @@ def parse_config():
         cfg_files.append(os.path.join(pwd, 'jcrc'))
     if home:
         cfg_files.append(os.path.join(home, '.jcrc'))
+        cfg_files.append(os.path.join(home, '.config','jc','config'))
     if xdg:
-        cfg_files.append(os.path.join(xdg,'jcrc','config'))
+        cfg_files.append(os.path.join(xdg,'jc','config'))
 
     if cfg_files:
         for f in cfg_files:
             cfg_argv = config_to_argv(f)
             if cfg_argv:
-                parse_argv(cfg_argv)
+                parse_args(cfg_argv)
 
 
-def parse_argv(argv):
-    """
-    parse input command line arguments
-    """
+def jdk_sanity(prg='javac'):
+    """ look for jdk program: javac, javadoc """
 
-    p = Pyopt()
-    ## bool options
-    p.add_bool("-h -help --help help")
-    p.add_bool("-v -version --version version")
-    p.add_bool("-l -list --list list")
-    p.add_bool("-q -quiet --quiet quiet")
-    p.add_bool("-c -clean --clean clean")
-    p.add_bool("-t -test --test test")
-    p.add_bool("-i -include --include")
-    p.add_bool("-x -javadoc --javadoc")
-    ## string options
-    p.add_str_fancy("-E --exclude")
-    p.add_str_fancy("-r --root")
-    p.add_str_fancy("-C --class")
-    p.add_str_fancy("-j --jardir")
-    p.add_str_fancy("-z --resdir")
-    p.add_str_fancy("-L --lib")
-    p.add_str_fancy("-d --doc")
-    p.add_str_fancy("-n --name")
-    p.add_str_fancy("-o --output")
-    p.add_str_fancy("-m --main")
-    p.add_str_fancy("-M --manifest")
-    p.add_str_fancy("-cp -classpath")
+    java_home = None
 
-    args = p.parse(argv)
-    if args: config['extra_args'] += args
+    if config['-javahome']:
+        java_home = config['-javahome']
+    
+    if java_home:
+        prg_path = os.path.join(java_home, 'bin', prg)
+        if not os.access(prg_path, os.X_OK):
+            die("'%s' not found in JAVA_HOME=%s\n", prg, java_home)
+    else:
+        prg_path = which(prg)
+        if not prg_path:
+            die("'%s' not installed\n", prg)
 
-    for o in ['-help','-version','-quiet','-clean','-test','-list','-javadoc','-include']:
-        if p.is_set(o): config[o] = True
-
-    for o in ['-exclude','-root','-class','-jardir','-lib','-resdir',
-              '-classpath','-name','-main','-manifest','-output','-doc']:
-        if p.is_set(o): config[o] = p.get(o)
+        # set JAVA_HOME based on location of jdk-program
+        actual = follow_link( prg_path )
+        java_home_bin = os.path.dirname( actual )
+        java_home     = os.path.dirname( java_home_bin )
+    
+    # set JAVA_HOME for later
+    config['-javahome']     = java_home
+    config[prg]             = os.path.join( java_home, 'bin', prg )
+    os.environ['JAVA_HOME'] = java_home
 
 
-def only_modified_java_files(files):
-    """
-    return java files that does not have a new version in config['-class']
-    """
-    # we cannot have any pre-compiled versions if this holds
-    if not os.path.isdir(config['-class']):
-        return files
+def build_classpath():
+    """ create Lib objects and config['-classpath'] values """
 
-    mod_files = []
+    libs = []
+    class_path = []
+
+    if os.path.isdir( config['-lib'] ):
+        jars = path_walk( config['-lib'], jar_matcher, config['-strip'] )
+        for j in jars:
+            libs.append( Lib(j) ) # stuff these into jar for standalone
+            class_path.append( j )
+
+    if config['-classpath']:
+        class_path.append( config['-classpath'] )
+
+    class_path.append( config['-obj'] )
+
+    config['-classpath'] = os.pathsep.join( class_path )
+
+    return libs
+
+
+def find_pkgs(files):
+    """ use regexp to parse files (hoho) """
+
+    # 'name' -> Pkg('name')
+    pkgs   = {}
 
     for f in files:
-        tmp_name = f.replace(config['-root'], config['-class'], 1)
-        class_name = tmp_name.replace('.java', '.class') #TODO regexp
-        if os.path.isfile(class_name):
-            java_mod_time  = os.stat(f).st_mtime
-            class_mod_time = os.stat(class_name).st_mtime
-            if java_mod_time >= class_mod_time:
-                mod_files.append(f)
+
+        pk  = None
+        dep = []
+        ent = None # entry point (main function)
+
+        fh  = open(f)
+
+        lns = fh.read()
+        fh.close()
+
+        m = pkg_regex.search( lns )
+        if m:
+            pk = m.group(1)
+
+        im = imprt_regex.findall( lns )
+        if im:
+            dep += im
+
+        im = imprt2_regx.findall( lns )
+        if im:
+            dep += im
+    
+        ent = main_regex.search( lns )
+## 
+##         for line in fh.readlines():
+## 
+##             m = pkg_regex.match( line )
+##             if m: pk = m.group(1)
+## 
+##             m = imprt_regex.match( line )
+##             if m: dep.append( m.group(1))
+## 
+##             # not safe, we ignore comments :-)
+##             #m = stop_regex.match( line )
+##             #if m: break
+## 
+##         fh.close()
+
+        if not pk:
+            pk = '.' # dummy package (illegal Java package name)
+
+        if not pk in pkgs:
+            pkgs[pk] = Pkg(pk)
+
+        pkgs[pk].add_file( f )
+
+        for d in dep:
+            pkgs[pk].depends_on( d )
+
+        if ent:
+            pkgs[pk].add_entry( f )
+
+    return pkgs
+
+
+def build_dep_graph( pkgs ):
+    """
+    build the dependency graph, we can 
+    safely ignore reverse dependencies
+    """
+    for k in pkgs:
+        for dep in pkgs[k].deps:
+            if dep in pkgs:
+                pkgs[dep].add_child(pkgs[k])
+
+
+def find_outdated_pkgs( pkgs ):
+    """
+    find out whether or not packages are outdated
+    """
+
+    # no pkg can be up-to-date if this dir is missing
+    if not os.path.isdir(config['-obj']):
+        for k in pkgs:
+            pkgs[k].make = True
+    else:
+        for k in pkgs:
+            pkgs[k].stat_compare(config['-obj'])
+
+
+def javac_outdated_pkgs( pkgs ):
+    """ use javac to compile modified packages and their children """
+
+    pkg_mk_count = 0
+
+    javac_cmd = 'javac.exe' if config['windows'] else 'javac'
+
+    cmd = []
+    cmd.append(config[javac_cmd])
+    cmd.append('-d')
+    cmd.append(config['-obj'])
+    cmd.append('-sourcepath')
+    cmd.append(config['-src'])
+    cmd.append('-cp')
+    cmd.append(config['-classpath'])
+    # assume user knows what he || she is adding
+    if config['xargs']: cmd += config['xargs']
+
+    for k in pkgs:
+        if pkgs[k].make:
+            cmd += pkgs[k].files
+            pkg_mk_count += 1
+
+    if pkg_mk_count == 0:
+        return False
+
+    if not config['-dryrun']:
+        dir_or_mkdir( config['-obj'] )
+
+    info("compiling: %d/%d packages\n",pkg_mk_count, len(pkgs))
+    run_cmd(cmd, config['-dryrun'])
+
+    return True
+
+
+def zip_objs( pkgs, done_stuff ):
+    """ zip .class files into config['-dst']/config['-name'] """
+
+    zip_it   = True
+    jar_file = os.path.join(config['-dst'], config['-name'])
+
+    if os.path.isfile( jar_file ) and not done_stuff:
+        jar_mod = os.stat(jar_file).st_mtime
+        for k in pkgs:
+            t = pkgs[k].latest_class_file(config['-obj'])
+            if t > jar_mod:
+                zip_objs( pkgs, True )
+        return None
+
+    else:
+
+        dir_or_mkdir(config['-dst'])
+        manifest_dir = os.path.join(config['-obj'], 'META-INF')
+        dir_or_mkdir(manifest_dir)
+        write_manifest(manifest_dir)
+
+        manifest_path = os.path.join(manifest_dir, 'MANIFEST.MF')
+        manifest_zip_path = os.path.join('META-INF','MANIFEST.MF')
+
+        info("zip it up: %s\n"% jar_file)
+
+        # the zip/jar archive
+        if config['-zlib']:
+            zip_fh = zipfile.ZipFile(jar_file, 'w', zipfile.ZIP_DEFLATED)
         else:
-            mod_files.append(f)
+            zip_fh = zipfile.ZipFile(jar_file, 'w')
 
-    return mod_files
+        # manifest should be first
+        zip_fh.write(manifest_path, manifest_zip_path)
 
+        for f in path_walk(config['-obj'], class_matcher, None):
+            zip_fh.write(f, f[len(config['-obj'])+1:])
+        zip_fh.close()
 
-def update_classpath():
-    """
-    if config['-class'] is dir add to -classpath
-    if config['-lib']/*.jar matches anything add them to -classpath
-    """
-    class_path = []
-    if config['-classpath']:
-        class_path = config['-classpath'].split(os.pathsep)
-    if not config['-class'] in class_path:
-        class_path.append(config['-class'])
-
-    # add any libraries we depend on to classpath
-    if os.path.isdir(config['-lib']):
-        files = path_walk(config['-lib'], jar_matcher)
-        if files:
-            class_path += files
-
-    config['-classpath'] = os.pathsep.join(class_path)
+        return jar_file
 
 
-def javac(files):
-    """ call javac with files found in config['-root'] """
+def write_manifest(to_dir):
+    """ write default manifest, or user provided """
 
-    if not which('javac'): die("javac - command not found\n")
+    mnf = os.path.join(config['-res'], 'META-INF', 'MANIFEST.MF')
 
-    mod_files = only_modified_java_files( files )
+    fh  = open(os.path.join(to_dir, 'MANIFEST.MF'), 'w')
 
-    if not mod_files: return
+    if config['-manifest'] or os.path.isfile( mnf ):
+        fh_user_manifest = open(config['-manifest'] or mnf , 'r')
+        fh.write(fh_user_manifest.read())
+        fh_user_manifest.close()
+    else:
+        fh.write('Manifest-Version: 1.0\n')
+        fh.write('JC-Version: jc 1.0\n')
+        fh.write('Created-By: jc 1.0\n')
+        if config['-main']:
+            fh.write('Main-Class: %s\n'% config['-main'])
+        fh.write('\n\n')
+    fh.close()
 
-    update_classpath()
 
-    if not config['-quiet']:
-        for f in mod_files:
-            pretty = f[len(config['-root'])+1:-5].replace(os.sep,".")
-            print("compiling: %s"%pretty)
+def add_resources():
+    """ add everything in config['-res'] to jar """
 
-    dir_or_mkdir(config['-class'])
+    if not os.path.isdir(config['-res']): return
 
-    cmd = [ 'javac', '-d', config['-class'] ]
-    cmd += ['-cp', config['-classpath'] ]
-    if config['extra_args']:
-        cmd += config['extra_args']
-    cmd += mod_files
+    jar_name = os.path.join(config['-dst'],config['-name'])
 
-    fail = subprocess.call(cmd)
+    if config['-zlib']:
+        jar_fh = zipfile.ZipFile(jar_name, 'a', zipfile.ZIP_DEFLATED)
+    else:
+        jar_fh = zipfile.ZipFile(jar_name, 'a')
 
-    if fail: die("compile failed")
+    info("add 2 zip: %s\n"% config['-res'])
+
+    for f in path_walk(config['-res'], any_matcher, config['-strip']):
+        jar_fh.write(f, f[len(config['-res'])+1:])
+
+    jar_fh.close()
 
 
 def clean():
-    """ remove config['-class'] config['-jardir'] config['-doc'] if present """
+    """ remove compiled code + javadoc etc """
 
-    rm_dir_and_its_empty_parents(config['-doc'])
-    rm_dir_and_its_empty_parents(config['-class'])
-    rm_dir_and_its_empty_parents(config['-jardir'])
+    for e in ['-obj','-htm', '-dst']:
+        if os.path.isdir( config[e] ):
+            info('rmdir: %s\n' % config[e])
+            rm_rf( config[e] )
+            parent = os.path.dirname(config[e])
+            if parent:
+                rm_empty_dirs(parent)
+    sys.exit(0)
 
 
-def rm_dir_and_its_empty_parents(d):
-    """ remove a directory and all of its empty parents """
-    if os.path.isdir(d):
-        if not config['-quiet']: print("rmdir: %s"% d)
-        rm_rf(d)
-        parent = os.path.dirname(d)
-        if parent:
-            rm_empty_dirs(parent)
+#TODO add legal javadoc options
+def javadoc(files):
+    """ run javadoc on src """
 
-def rm_junit_template(fname, nada=None):
+    javadoc_cmd = 'javadoc.exe' if config['windows'] else 'javadoc'
+    
+    dir_or_mkdir(config['-htm'])
+
+    cmd = []
+    cmd.append(config[javadoc_cmd])
+    if not config['-nolink']:
+        cmd.append('-linksource')
+    cmd.append('-classpath')
+    cmd.append(config['-classpath'])
+    cmd.append('-d')
+    cmd.append(config['-htm'])
+    if config['-quiet']:
+        cmd.append('-quiet')
+    cmd.append('-link');
+    cmd.append(config['-link'])
+    # assume user knows what he || she is adding
+    if config['xargs']: cmd += config['xargs']
+    cmd += files
+
+    run_cmd(cmd, config['-dryrun'])
+    sys.exit(0)
+
+
+def write_junit_stub():
+    """ write code stub to run tests, see templates """
+
+    test_dir = os.path.join(config['-src'],"com","github","bjarneh","jc")
+    dir_or_mkdir(test_dir)
+
+    test_file = os.path.join(test_dir, "JcTestRunner.java")
+    atexit.register( rm_junit_template, test_file, None )
+
+    fd = open(test_file, 'w')
+    fd.write(junit_template)
+    fd.close()
+
+
+def rm_junit_template(fname, arg=None):
     """ remove the junit template code from 'src' dir """
     d = os.path.dirname(fname)
     os.unlink(fname)
     rm_empty_dirs(d)
+
 
 def junit_sanity():
     """ look for the existence of junit in -classpath """
@@ -382,352 +676,469 @@ def junit_sanity():
     for p in paths:
         # we should ideally check for version of junit, but well...
         if p.find('junit') != -1 and p.endswith('.jar'):
-            zip_fd = zipfile.ZipFile(p, 'r')
-            files  = zip_fd.namelist()
-            zip_fd.close()
+            zip_fh = zipfile.ZipFile(p, 'r')
+            files  = zip_fh.namelist()
+            zip_fh.close()
             if looking_for in files:
                 found = True
                 break
 
     if not found:
-        err = sys.stderr.write
-        err("\n[ERROR] Could not find 'junit' inside your CLASSPATH\n")
-        err("[ERROR] Make sure to add junit version >= 4 using the \n")
-        err("[ERROR] '-classpath' option or by placing it inside\n")
-        err("[ERROR] the %s directory, before you run unit tests\n\n"%(config['-lib']))
-        sys.exit(1)
-   
+        answ = raw_input(" \n JUnit not found, download it? [Y/n]: ")
+        answ = answ.lower()
+        if not answ or answ in ['y', 'yes']:
+            print(" Downloading.... junit.jar\n")
+            dir_or_mkdir( config['-lib'] )
+            junit_lib = wget("http://bjarneh.at.ifi.uio.no/junit.jar")
+            fh = open(os.path.join(config['-lib'], 'junit.jar'), 'w')
+            fh.write( junit_lib )
+            fh.close()
+            junit_location = os.path.join( config['-lib'], 'junit.jar' )
+            config['-classpath'] += (os.pathsep + junit_location)
+        else:
+            sys.stderr.write(" Ok, goodbye..\n\n")
+            sys.exit(1)
+
 
 def junit():
     """ run junit tests if junit is present in -classpath """
 
-    update_classpath()
-    junit_sanity()
+    jar_name = os.path.join(config['-dst'], config['-name'])
 
-    test_dir = os.path.join(config['-root'],"com","github","bjarneh","jc")
-    dir_or_mkdir(test_dir)
+    info("\n======= TESTING ======= \n\n")
 
-    test_file = os.path.join(test_dir, "JcTestRunner.java")
-    atexit.register( rm_junit_template, test_file, None )
-
-    fd = open(test_file, 'w'); fd.write(java_template); fd.close()
-
-    javac(path_walk(config['-root'], java_matcher))
-    jar_name = zip_classes()
-
-    if config['-classpath']:
-        config['-classpath'] += ( os.pathsep + jar_name )
-    else:
-        config['-classpath'] = jar_name
-
-    print("\n======= TESTING ======= \n")
-
-    cmd = ['java','-classpath']
-    cmd.append(config['-classpath'])
+    cmd = []
+    cmd.append('java.exe' if config['windows'] else 'java')
+    cmd.append('-classpath')
+    cmd.append(config['-classpath'] + os.pathsep + jar_name)
     cmd.append('com.github.bjarneh.jc.JcTestRunner')
     cmd.append(jar_name)
 
-    fail = subprocess.call(cmd)
-
-    if fail:
-        die("\n======= FAILED ======= \n\n")
+    if config['-dryrun']:
+        run_cmd( cmd, True)
     else:
-        print("======= SUCCESS ======= \n")
+        fail = subprocess.call(cmd)
+        if fail:
+            die("\n======= FAILED ======= \n\n")
+        else:
+            info("======= SUCCESS ======= \n\n")
+    sys.exit(0)
 
 
-def write_manifest(to_dir):
-    """ write manifest into config['-class']/META-INF/MANIFEST.MF """
-    fd = open(os.path.join(to_dir, 'MANIFEST.MF'), 'w')
-    if config['-manifest']:
-        fd_user_manifest = open(config['-manifest'], 'r')
-        content = fd_user_manifest.read()
-        fd.write(fd_user_manifest.read())
-        fd_user_manifest.close()
+def add_deps( libs ):
+    """ add dependencies to jar file """
+
+    # nothing to do then
+    if not libs: return
+
+    jar_name = os.path.join(config['-dst'], config['-name'])
+
+    if config['-zlib']:
+        jar_fh = zipfile.ZipFile(jar_name, 'a', zipfile.ZIP_DEFLATED)
     else:
-        fd.write('Manifest-Version: 1.0\n')
-        fd.write('JC-Version: jc 1.0\n')
-        fd.write('Created-By: jc 1.0\n')
-        if config['-main']:
-            fd.write('Main-Class: %s\n'% config['-main'])
-        fd.write('\n\n')
-    fd.close()
+        jar_fh = zipfile.ZipFile(jar_name, 'a')
+
+    for lib in libs:
+        lib.add_to( jar_fh )
+
+    jar_fh.close()
 
 
-def jar_is_newer(jar_file_name):
-    """ check if jar file is newer than all classes """
+def assert_main( pkgs ):
+    """ make sure we have a main entry point """
 
-    if not os.path.isfile(jar_file_name): return False
+    # assume user knows how stuff works
+    if config['-main'] or config['-manifest']: return True
 
-    # if user supplies main or his own manifest we update
-    if config['-main'] or config['-manifest']: return False
+    manifest = os.path.join('META-INF', 'MANIFEST.MF')
+    jar_name = os.path.join(config['-dst'], config['-name'])
+    zip_fh   = zipfile.ZipFile(jar_name, 'r')
+    content  = zip_fh.read(manifest)
+    zip_fh.close()
 
-    jar_mod_time = os.stat(jar_file_name).st_mtime
+    if content.find('Main-Class:') != -1: return False
 
-    files = path_walk(config['-class'],lambda x: x.endswith('.class'))
-    if not files: return False
+    # start looking yourself
+    entry_points = []
 
-    for f in files:
-        if os.stat(f).st_mtime > jar_mod_time:
-            return False
+    for k in pkgs:
+        if pkgs[k].entry:
+            entry_points += pkgs[k].entry
+
+    if not entry_points:
+        die("[ERROR] no main function found\n")
+
+    choice  = choose_entry( entry_points )
+    lines   = content.split("\n")
+    n_lines = []
+    for line in lines:
+        if line:
+            n_lines.append(line)
+        else:
+            break
+    n_lines.append("Main-Class: %s"% entry_points[choice])
+    n_lines.append("\n")
+
+    # overwrite old MANIFEST file
+    zip_fh = zipfile.ZipFile(jar_name, 'a')
+    zip_fh.writestr(manifest, '\n'.join(n_lines))
+    zip_fh.close()
 
     return True
 
 
-def zip_classes(check_time_stamp=False):
-    """ create jar archive of compiled code """
+def choose_entry( choices ):
+    """ choose an entry point """
 
-    jar_name = os.path.join(config['-jardir'], config['-name'])
-    if check_time_stamp:
-        if jar_is_newer(jar_name): return None
+    if not choices: die("[ERROR] no entry points\n")
+    if len(choices) == 1: return 0
 
-    dir_or_mkdir(config['-jardir'])
-    manifest_dir = os.path.join(config['-class'], 'META-INF')
-    dir_or_mkdir(manifest_dir)
-    write_manifest(manifest_dir)
-
-    manifest_path = os.path.join(manifest_dir, 'MANIFEST.MF')
-    manifest_zip_path = os.path.join('META-INF','MANIFEST.MF')
-
-    jar_name = os.path.join(config['-jardir'], config['-name'])
-    if not config['-quiet']: print("zip it up: %s"% jar_name)
-
-    # the zip/jar archive
-    zip_fd = zipfile.ZipFile(jar_name, 'w')
-
-    # manifest should be first
-    zip_fd.write(manifest_path, manifest_zip_path)
-
-    for f in path_walk(config['-class'], class_matcher):
-        zip_fd.write(f, f[len(config['-class'])+1:])
-    zip_fd.close()
-
-    return jar_name
+    print("\nYou have not chosen an entry point (Main-Class)\n")
+    for i, e in enumerate(choices):
+        print(" %2d - %s"%( i, e ))
+    entry  = raw_input("\nType your choice >  ")
+    print('')
+    ientry = int(entry)
+    if ientry not in range(0, len(choices)):
+        raise Exception(" %d : not in range"% ientry)
+    return ientry
 
 
-def choose_main_file(files):
-    """ make user choose a candidate """
-
-    print('-'*75)
-    print('\n You have not chosen an entry point (Main-Class)\n')
-    for i in range(0, len(files)):
-        print(' %d  -  %s'%(i, files[i]))
-    print('\n' + '-'*75)
-    chosen = raw_input('\nType your choice > ')
-
-    try:
-        ichosen = int(chosen)
-        if not ichosen in range(len(files)):
-            raise Exception("not in range")
-        return files[ichosen][len(config['-root'])+1:-5].replace(os.sep,'.')
-    except:
-        pass
-
-    return None
-
-
-def find_entry_point():
-    """ try to locate entry point (main class) with regexp """
-    entry =\
-    re.compile(r'public\s+static\s+void\s+main\s*\(\s*String\[\s*\]\s+args\)')
-
-    candidates = []
-
-    for f in path_walk(config['-root'], java_no_test_matcher):
-        fd = open(f, 'r')
-        content = fd.read(); fd.close()
-        m = entry.search(content)
-        if m:
-            candidates.append(f)
-
-    if not candidates:
-        return None
-    elif len(candidates) == 1:
-        return candidates[0][len(config['-root'])+1:-5].replace(os.sep,'.')
-    else:
-        return choose_main_file(candidates)
-
-
-def assert_main_class():
-    """
-    assert that we have an entry point, i.e. jar is executable
-    this function will cause a sys.exit(1) if entry point is not
-    found or given in prompt
-    """
-    if not config['-main']:
-        if config['-manifest']:
-            fd = open(config['-manifest'], 'r')
-            content = fd.read(); fd.close()
-            if content.find('Main-Class') == -1:
-                sys.stderr.write("[ERROR] MANIFEST is missing 'Main-Class'")
-                die("[ERROR] shell script (-output) has no entry point\n")
-        else:
-            entry = find_entry_point()
-            if entry:
-                config['-main'] = entry
-            else:
-                die("[ERROR] no entry point (-main) for '-output'\n")
-
-
-def bash_script(jar_was_updated):
+def bash_script(work_was_done):
     """
     write bash script stub and executable jar to a file
     """
-    jar_name = os.path.join(config['-jardir'], config['-name'])
+
+    jar_name = os.path.join(config['-dst'], config['-name'])
 
     # do nothing if file exists and is newer than jar-file
-    if os.path.isfile(config['-output']) and not jar_was_updated:
+    if os.path.isfile(config['-output']) and not work_was_done:
         timestamp_out = os.stat(config['-output']).st_mtime
         timestamp_jar = os.stat(jar_name).st_mtime
         if timestamp_out >= timestamp_jar:
             return
 
-    if not config['-quiet']: print("shell/jar: %s"% config['-output'])
-    fd_bash = open(config['-output'], 'w+b')
-    fd_bash.write(bash_template)
-    fd_jar = open(jar_name, 'r+b')
-    fd_bash.write(fd_jar.read())
-    fd_jar.close()
-    fd_bash.close()
+    info("shell/jar: %s\n", config['-output'])
+    fh_bash = open(config['-output'], 'w+b')
+    fh_bash.write(bash_template)
+    fh_jar = open(jar_name, 'r+b')
+    fh_bash.write(fh_jar.read())
+    fh_jar.close()
+    fh_bash.close()
     os.chmod(config['-output'], 0755)
 
 
-def list_config():
-    """ 
-    list content of command line options
-    this may be useful if config files have set
-    some value that you were not aware of etc.
+def info(fmt, *args):
+    """ print an info message if !quiet """
+    if not (config['-quiet'] or config['-dryrun']):
+        out_str = fmt%(args) if args else "%s"%(fmt)
+        sys.stdout.write(out_str)
+
+
+def echo_exit(something, status=0):
+    """ echo something and exit with status """
+    sys.stdout.write(something + '\n')
+    sys.exit( status )
+
+
+def normalize_paths():
+    """ just make sure we remove added / or // etc"""
+    for e in ['-src','-obj','-htm','-lib','-dst','-res']:
+        config[e] = os.path.normpath(config[e])
+
+
+def dep_info_exit( pkgs ):
+    """ print dependency info gathered (with regexp!) """
+    for k in pkgs:
+        pkgs[k].info()
+    sys.exit(0)
+
+
+def list_settings_exit():
+    """ print default||config arguments """
+
+    print("\n Options and their content:\n")
+    for k in config:
+        if k.startswith("-"):
+            print("%12s => %s"%(k, config[k]))
+    print("")
+    sys.exit(0)
+
+
+# lambda filters for the path-walker
+def any_matcher(f): return True
+def jar_matcher(f): return f.endswith('.jar')
+def java_matcher(f): return f.endswith('.java')
+def class_matcher(f): return f.endswith('.class')
+def java_but_no_test(f): return java_matcher(f) and not f.endswith('Test.java')
+
+
+# ______________________________________________________________ main
+
+
+def main():
+    """ everything is done from here, let's not be cryptic! """
+
+    # start timer, report time used if work_done
+    t0        = time.time()
+    work_done = False
+    matcher   = java_but_no_test
+
+    # init command line parser
+    init_parser()
+    # parse config files; $HOME/.jcrc etc..
+    parse_config()
+    # parse command line arguments
+    parse_args( sys.argv[1:] )
+    # remove traling '/' and so on.
+    normalize_paths()
+    # do simple options [-version,-help,-clean,-list]
+    if config['-list']   : list_settings_exit()
+    if config['-help']   : echo_exit( __doc__ )
+    if config['-clean']  : clean()
+    if config['-version'] and not config['-doc']:
+        echo_exit( __version__ )
+    # classpath + create objects for lib/*.jar
+    libs = build_classpath()
+    # we need to do some extra work if we are testing
+    if config['-test']:
+        matcher = java_matcher # includes *Test.java also
+        write_junit_stub()     # include code stub to run tests
+        junit_sanity()         # make sure JUnit is in classpath
+    # check sanity, i.e. jdk installed (javac/javadoc)
+    if config['-doc']:
+        jdk_sanity('javadoc.exe' if config['windows'] else 'javadoc')
+    else:
+        jdk_sanity('javac.exe' if config['windows'] else 'javac')
+    # fetch java files
+    files = path_walk(config['-src'],
+                      matcher,
+                      config['-strip']);
+    if not files:
+        if os.path.isdir(config['-src']):
+            echo_exit("No java files found in: %s"% config['-src'], 1)
+        else:
+            echo_exit("Directory not found: %s"% config['-src'], 1)
+    # create javadoc (+exit) if -doc option was given
+    if config['-doc'] : javadoc(files)
+    # create Pkg objects from java packages
+    pkgs = find_pkgs( files )
+    # debug option, prints dependency info
+    if config['-dep']: dep_info_exit( pkgs )
+    # create links from parents to children
+    build_dep_graph( pkgs )
+    # calculate which packages need to be compiled
+    find_outdated_pkgs( pkgs )
+    # compile outdated packages
+    work_done = javac_outdated_pkgs( pkgs )
+    # zip classes into jar file
+    zip_objs( pkgs, work_done )
+    # add files in config['-res'] to jar file
+    add_resources()
+    # run junit tests if -test option was given
+    if config['-test']: junit()
+    # add other dependencies to jar
+    if config['-output'] or config['-pack']:
+        add_deps(libs)
+    # produce executable shell/batch script
+    if config['-output']:
+        update = assert_main( pkgs )
+        bash_script(update or work_done)
+    # only display time if we actually did some work
+    if work_done:
+        info("time used: %.3f seconds\n", ( time.time() - t0 ))
+
+
+# ______________________________________________________________ Pkg
+
+class Pkg(object):
     """
-    sys.stdout.write('\n Options and their content:\n\n')
-    keys = config.keys(); keys.sort()
-    for k in keys:
-        if k.startswith('-'):
-            sys.stdout.write("%14s  =>  '%s'\n"%(k, config[k]))
-    sys.stdout.write('\n')
+    Represents a package, i.e. list of files
+    that belong to the same package.
+    """
+    def __init__(self, name):
+        self.name  = name
+        self.files = []
+        self.entry = []
+        self.deps  = set()
+        self.child = set()
+        self.make  = False
 
-    if config['extra_args']:
-        arg_str = ' '.join(config['extra_args'])
-        sys.stdout.write(" javac options: %s\n\n"%(arg_str))
+    def add_file(self, f):
+        self.files.append( f )
+
+    def add_entry(self, e):
+        """ add entry point, class with main """
+        base = os.path.basename(e)
+        if self.name != '.':
+            entry_point = "%s.%s"%(self.name, base[:-5])
+        else:
+            entry_point = base[:-5]
+        self.entry.append(entry_point)
+
+    def depends_on(self, d):
+        """ self.Pkg depends on 'd' """
+        self.deps.add(d)
+
+    def add_child(self, c):
+        """ a package 'c' depends on us """
+        self.child.add(c)
+
+    def stat_compare(self, obj_root):
+        """
+        stat .class files and .java files to
+        compare the modified timestamp. i.e.
+        compile if .java is newer than .class
+        """
+
+        # where we can expect to find compiled output
+        root = os.path.join(obj_root, self.name.replace('.', os.sep))
+
+        for f in self.files:
+            f_class = os.path.basename(f)[:-5] + '.class'
+            f_path  = os.path.join(root, f_class)
+            if os.path.isfile( f_path ):
+                java_mod  = os.stat(f).st_mtime
+                class_mod = os.stat(f_path).st_mtime
+                if java_mod > class_mod:
+                    self.needs_make()
+                    break
+            else:
+                self.needs_make()
+                break
+
+    def latest_class_file(self, obj_root):
+        """ report timestamp of newest .class file of package"""
+
+        # a bit of duplicate code here, hmm
+
+        newest = 0
+        root   = os.path.join(obj_root, self.name.replace('.', os.sep))
+
+        for f in self.files:
+            f_class = os.path.basename(f)[:-5] + '.class'
+            f_path  = os.path.join(root, f_class)
+            if os.path.isfile( f_path ):
+                class_mod = os.stat(f_path).st_mtime
+                if class_mod > newest:
+                    newest = class_mod
+        return newest
 
 
-def javadoc():
-    """ produce some documentation with javadoc """
+    def needs_make(self):
+        """
+        this package and its children needs to be compiled
+        """
+        # already handled
+        if not self.make:
+            self.make = True
+            for c in self.child:
+                c.make = True # not recursive
 
-    if not which('javadoc'): die("javadoc - command not found")
+    def __hash__(self):
+        """ to make the set do what it should """
+        return hash(self.name)
 
-    files = path_walk(config['-root'], java_no_test_matcher)
-    update_classpath()
+    def __eq__(self, other):
+        """ to make the set do what it should """
+        return self.name == other.name
 
-    cmd = []
-    cmd.append('javadoc')
-    cmd.append('-linksource')
-    if config['-classpath']:
-        cmd.append('-classpath'); cmd.append(config['-classpath'])
-    cmd.append('-d'); cmd.append(config['-doc'])
-    cmd.append('-link'); cmd.append('http://docs.oracle.com/javase/6/docs/api/')
-    cmd += files
+    def info(self):
+        """ print some info about myself """
+        print('\npkg\n   %s'% self.name)
+        print('fls')
+        for f in self.files:
+            print('   %s'% f)
+        print('dep')
+        for d in self.deps:
+            print('   %s'% d)
+        if self.entry:
+            print('haz')
+            for e in self.entry:
+                print('   %s'% e)
+        print('')
 
-    fail = subprocess.call(cmd)
-    if fail: die("javadoc failed")
+# ______________________________________________________________ Lib
 
-#javadoc -classpath lib/junit.jar -linksource -d doc -link http://docs.oracle.com/javase/6/docs/api/
+class Lib(object):
+    """ Represents a .jar file we include """
+    def __init__(self, fname):
+        self.fname = fname
+        
+    def __repr__(self):
+        return self.fname
 
-def add_libs(jar_name):
-    """ add libs to jar name for stand alone use """
-
-    junit_regex = re.compile(r".*junit[0-9\-\.]*\.jar$")
-
-    if not jar_name: return # FIXME can I safely do this?
-
-    jar_fd = zipfile.ZipFile(jar_name, 'a')
-
-    for f in path_walk(config['-lib'], jar_matcher):
-        m = junit_regex.match(f)
-        if m: continue # skip junit
-        zip_fd = zipfile.ZipFile(f, 'r')
-        if not config['-quiet']: print "add 2 zip: %s" % f
-        names  = zip_fd.namelist()
+    def add_to(self, jar_fh):
+        """ add my files to jar_fh we are not junit """
+        base = os.path.basename( self.fname )
+        m = junit_regex.match( base )
+        if m: return  # skip junit
+        zip_fh = zipfile.ZipFile(self.fname, 'r')
+        info("add 2 zip: %s\n",self.fname)
+        names  = zip_fh.namelist()
         for n in names:
             # add class files + any other file which is not
             # a MANIFEST.MF file, some libs have important
             # files stuffed into them (mysql.jar for instance)
-            if not n.endswith('MANIFEST.MF'):
-                b = zip_fd.read(n)
-                jar_fd.writestr(n, b)
-        zip_fd.close()
-
-    jar_fd.close()
-
-
-def add_resources(jar_name):
-    """ add everything in config['-resdir'] to jar-file """
-
-    if not jar_name: return # FIXME can I safely do this?
-    if not os.path.isdir(config['-resdir']): return
-
-    jar_fd = zipfile.ZipFile(jar_name, 'a')
-
-    if not config['-quiet']:
-        print "add 2 zip: %s"% config['-resdir']
-
-    for f in path_walk(config['-resdir'], any_matcher):
-        jar_fd.write(f, f[len(config['-resdir'])+1:])
-
-    jar_fd.close()
-
-
-#TODO FIXME when libs become multiple argument option
-def normalize_paths():
-    """ just make sure we remove added / or // etc"""
-    for e in ['-root','-class','-doc','-lib','-jardir','-resdir']:
-        config[e] = os.path.normpath(config[e])
-
-
-def build():
-    """ javac, jar and possibly make bash-script """
-    t0 = time.time() # do some timing
-    javac(path_walk(config['-root'], java_no_test_matcher))
-    if config['-output']: assert_main_class()
-    jar_name = zip_classes(check_time_stamp=True)
-    add_resources(jar_name)
-    if config['-include'] or config['-output']:
-        add_libs(jar_name)
-    if config['-output']:
-        bash_script(jar_name)
-    if jar_name: # this indicates that something was compiled
-        sys.stderr.write("time used: %.3fs\n"%( time.time() - t0 ))
-
-
-# lambda's
-def java_matcher(f): return f.endswith('.java')
-def java_no_test_matcher(f): return java_matcher(f) and not f.endswith('Test.java')
-def class_matcher(f): return f.endswith('.class')
-def jar_matcher(f): return f.endswith('.jar')
-def any_matcher(f): return True
-
-
-
-def main():
-    """ parse arguments, look for files, compile/clean/test/zip etc.."""
-
-    parse_config() # config files before command line arguments
-    parse_argv(sys.argv[1:]) # makes command line overwrite config options
-
-    if config['-list']: list_config(); sys.exit(0)
-    if config['-help']: print(__doc__); sys.exit(0)
-    if config['-version']: print(__version__); sys.exit(0)
-
-    normalize_paths()
-
-    if config['-clean']:
-        clean()
-    elif config['-test']:
-        junit()
-    elif config['-javadoc']:
-        javadoc()
-    else:
-        build()
+            if not os.path.basename(n) == 'MANIFEST.MF':
+                b = zip_fh.read(n)
+                jar_fh.writestr(n, b)
+        zip_fh.close()
 
 # ______________________________________________________________ utility
+
+def path_walk(dir_name, criteria, exclude):
+    """
+    traverse 'dir_name', collected files matching 'criteria'
+    and ignore directories with names in comma-separated
+    list found in exclude
+    """
+
+    ignore_dirs = None
+    collected   = []
+
+    if exclude: # We ignore .svn/.bzr/.hg/.git by default
+        ignore_dirs = exclude.split(',')
+
+    for root, dirs, files in os.walk(dir_name):
+        # do not look in repository dires (.git,.svn ..)
+        if dirs and ignore_dirs:
+            for ign in ignore_dirs:
+                if ign in dirs: dirs.remove(ign)
+        if files:
+            for f in files:
+                if criteria(f):
+                    collected.append(os.path.join(root, f))
+
+    return collected
+
+
+#TODO pretty print command
+def run_cmd(cmd, dryrun=False):
+    """ run a command in subprocess || print command """
+    if dryrun:
+        pretty_print( cmd )
+    else:
+        fail = subprocess.call(cmd)
+        if fail:
+            die("cmd failed: %s\n", ' '.join(cmd))
+
+
+def pretty_print(cmd, maxwidth=79):
+    """ print a command but break it up if it's too wide """
+
+    cur = 0
+
+    for i, e in enumerate( cmd ):
+        if cur + len(e) >= maxwidth:
+            sys.stdout.write("\\\n   %s"%e)
+            cur = len(e) + 3
+        else:
+            sys.stdout.write(" %s"%e)
+            cur += len(e) + 1
+
+    sys.stdout.write("\n")
+
 
 def rm_rf(d):
     """ rm -rf modified from activestate: 552732"""
@@ -739,6 +1150,7 @@ def rm_rf(d):
             os.unlink(p)
     os.rmdir(d)
 
+
 def rm_empty_dirs(d):
     """ remove empty dirs recursively """
     if not os.path.isdir(d): return
@@ -747,17 +1159,18 @@ def rm_empty_dirs(d):
         os.rmdir(d)
         d = tmp
 
+
 def dir_or_mkdir(pathname):
     if not os.path.isdir(pathname):
         os.makedirs(pathname)
 
+
 def die(fmt, *args):
     """ print something to stderr and exit(1) """
-    if args:
-        sys.stderr.write(fmt%(args))
-    else:
-        sys.stderr.write("%s"%(fmt))
+    out_str = fmt%(args) if args else "%s"%(fmt)
+    sys.stderr.write(out_str)
     sys.exit(1)
+
 
 def which(executable):
     """ checks whether the executable can be found in PATH variable"""
@@ -779,7 +1192,42 @@ def which(executable):
             return f
     return None
 
-# ______________________________________________________________ start Pyopt
+
+def follow_link(fname):
+    """ same as '/bin/readlink -f fname' """
+    while os.path.islink(fname):
+        fname = os.readlink(fname)
+    return fname
+
+
+def config_to_argv(fname):
+    """
+    If fname is a file strip comments + split on whitespace.
+    This function will be praised by Donald Knuth because of
+    its low complexity etc.
+    """
+    if os.path.isfile(fname):
+        cmt_strip = re.compile(r'#.*$')
+        actual_lines = []
+        fd = open(fname, 'r')
+        for line in fd.readlines():
+            clean_line = cmt_strip.sub('',line).strip()
+            if clean_line:
+                actual_lines.append( clean_line )
+        fd.close()
+        if actual_lines:
+            return ' '.join(actual_lines).split()
+    return None
+
+
+def wget(link, HEADERS={}):
+    """ fetch a resource over HTTP """
+    import urllib2 # adds 10-20ms, hide it here ☻
+    r = urllib2.Request( link, None, HEADERS )
+    return urllib2.urlopen(r).read()
+
+
+# ______________________________________________________________ Pyopt
 
 # getopt   - cannot parse arguments mixed with options
 # optparse - very complex and shitty library IMO
@@ -788,6 +1236,9 @@ class Option(object):
     """ base class for BoolOption and StrOption"""
     def __init__(self, flags):
         self.flags = flags
+
+    def __hash__(self):
+        return ''.join(self.flags).__hash__()
 
 class BoolOption(Option):
     """ boolean flag, defaults to false """
@@ -798,6 +1249,13 @@ class BoolOption(Option):
     def is_set(self):
         return self.found
 
+    def reset(self):
+        self.found = False
+
+    def __str__(self):
+        return "%50s => %s"%(' '.join(self.flags), self.found)
+
+
 class StrOption(Option):
     """ str options represents all non-bool flags """
     def __init__(self, flags):
@@ -806,6 +1264,9 @@ class StrOption(Option):
 
     def is_set(self):
         return len(self.args) > 0
+
+    def reset(self):
+        self.args = []
     
     def add(self, arg):
         self.args.append(arg)
@@ -815,6 +1276,9 @@ class StrOption(Option):
 
     def get_all(self):
         return self.args
+
+    def __str__(self):
+        return "%50s => %s"%(' '.join(self.flags), ''.join(self.args))
 
 
 class Pyopt(object):
@@ -861,6 +1325,14 @@ class Pyopt(object):
             else:
                 fancy_flags.append(f)
         return fancy_flags
+
+    def reset(self):
+        """
+        reset all options to blank/false
+        """
+        hash_set = set(self.options.values())
+        for o in hash_set:
+            o.reset()
 
 
     def is_set(self, flag):
@@ -934,11 +1406,14 @@ class Pyopt(object):
             return True
         return False
 
-# ______________________________________________________________ end Pyopt
+    def __str__(self):
+        return '\n'.join(map(lambda x: x.__str__(), set(self.options.values())))
 
+# ______________________________________________________________ init
 
 if __name__ == '__main__':
     try:
+        #cProfile.run("main()")
         main()
     except Exception, inst:
         traceback.print_exc()
