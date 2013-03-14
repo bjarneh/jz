@@ -4,3 +4,7 @@ man/tex/*.toc
 man/tex/*.log
 man/tex/*.out
 man/tex/*.pdf
+man/tex/Makefile
+man/tex/gen
+man/tex/wiki
+
