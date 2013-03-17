@@ -991,8 +991,12 @@ class Pkg(object):
         compile if .java is newer than .class
         """
 
+
         # where we can expect to find compiled output
-        root = os.path.join(obj_root, self.name.replace('.', os.sep))
+        if self.name == '.': # special case no package name
+            root = obj_root
+        else:
+            root = os.path.join(obj_root, self.name.replace('.', os.sep))
 
         for f in self.files:
             f_class = os.path.basename(f)[:-5] + '.class'
