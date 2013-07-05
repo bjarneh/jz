@@ -6,4 +6,5 @@ man/tex/*.out
 man/tex/*.pdf
 man/tex/Makefile
 man/tex/wiki
+tmp/*
 

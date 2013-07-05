@@ -10,8 +10,7 @@ Dependencies
 Install
 ======================================================
 
- Copy the file bin/jz to a directory beloning to your
- PATH variable, or add the bin/ directory here to your
- PATH
+ Copy the file bin/jz to a directory belonging to your
+ PATH variable, or add the bin/ directory to your PATH
 
-TODO write build scripts etc
+TODO write build scripts etc.
