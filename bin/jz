@@ -38,9 +38,9 @@
 
 
 """
- jc - java build tool without the XML
+ jz - java build tool without the XML
 
- usage: jc [OPTIONS]
+ usage: jz [OPTIONS]
 
  options:
 
@@ -96,7 +96,7 @@ import subprocess # run external commands
 
 # ______________________________________________________________ globals
 
-__version__    = "jc 1.0"
+__version__    = "jz 1.0"
 __author__     = "bjarneh@ifi.uio.no"
 
 
@@ -139,8 +139,6 @@ config['xargs']       = []
 
 
 # use regexp to parse files ☻
-## pkg_regex   = re.compile(r"""^\s*package\s+([\w.\-_\d]+);$""")
-## imprt_regex = re.compile(r"""^\s*import\s+([\w.\-_\d]+)\.[^\.]+$""")
 pkg_regex   = re.compile(r"""package\s+([\w.\-_\d]+);""")
 imprt_regex = re.compile(r"""import\s+([\w.\-_\d]+)\.[^\.;]+;""")
 imprt2_regx = re.compile(r"""import\s+static\s+([\w.\-_\d]+)\.[\w.\-_\d]+\.[^\.;]+;""")
@@ -162,7 +160,7 @@ pyopt = None
 
 # junit template to run the unit tests
 junit_template = """// generated
-package com.github.bjarneh.jc;
+package com.github.bjarneh.jz;
 
 import java.io.File;
 import java.io.IOException;
@@ -171,7 +169,7 @@ import java.util.Enumeration;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
 
-public class JcTestRunner {
+public class JzTestRunner {
 
     public static void runThem(String jarfile) {
         String[] tests = findTests(jarfile);
@@ -336,13 +334,13 @@ def parse_config():
     cfg_files = []
 
     if pwd:
-        cfg_files.append(os.path.join(pwd, '.jcrc'))
-        cfg_files.append(os.path.join(pwd, 'jcrc'))
+        cfg_files.append(os.path.join(pwd, '.jzrc'))
+        cfg_files.append(os.path.join(pwd, 'jzrc'))
     if home:
-        cfg_files.append(os.path.join(home, '.jcrc'))
-        cfg_files.append(os.path.join(home, '.config','jc','config'))
+        cfg_files.append(os.path.join(home, '.jzrc'))
+        cfg_files.append(os.path.join(home, '.config','jz','config'))
     if xdg:
-        cfg_files.append(os.path.join(xdg,'jc','config'))
+        cfg_files.append(os.path.join(xdg,'jz','config'))
 
     if cfg_files:
         for f in cfg_files:
@@ -581,8 +579,8 @@ def write_manifest(to_dir):
         fh_user_manifest.close()
     else:
         fh.write('Manifest-Version: 1.0\n')
-        fh.write('JC-Version: jc 1.0\n')
-        fh.write('Created-By: jc 1.0\n')
+        fh.write('JC-Version: jz 1.0\n')
+        fh.write('Created-By: jz 1.0\n')
         if config['-main']:
             fh.write('Main-Class: %s\n'% config['-main'])
         fh.write('\n\n')
@@ -653,10 +651,10 @@ def javadoc(files):
 def write_junit_stub():
     """ write code stub to run tests, see templates """
 
-    test_dir = os.path.join(config['-src'],"com","github","bjarneh","jc")
+    test_dir = os.path.join(config['-src'],"com","github","bjarneh","jz")
     dir_or_mkdir(test_dir)
 
-    test_file = os.path.join(test_dir, "JcTestRunner.java")
+    test_file = os.path.join(test_dir, "JzTestRunner.java")
     atexit.register( rm_junit_template, test_file, None )
 
     fd = open(test_file, 'w')
@@ -718,7 +716,7 @@ def junit():
     cmd.append('java.exe' if config['windows'] else 'java')
     cmd.append('-classpath')
     cmd.append(config['-classpath'] + os.pathsep + jar_name)
-    cmd.append('com.github.bjarneh.jc.JcTestRunner')
+    cmd.append('com.github.bjarneh.jz.JzTestRunner')
     cmd.append(jar_name)
 
     if config['-dryrun']:
@@ -901,7 +899,7 @@ def main():
 
     # init command line parser
     init_parser()
-    # parse config files; $HOME/.jcrc etc..
+    # parse config files; $HOME/.jzrc etc..
     parse_config()
     # parse command line arguments
     parse_args( sys.argv[1:] )
