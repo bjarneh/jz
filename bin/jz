@@ -38,7 +38,7 @@
 
 
 """
- jz - java build tool without the XML
+ jz - java compilation, zipping etc.
 
  usage: jz [OPTIONS]
 
