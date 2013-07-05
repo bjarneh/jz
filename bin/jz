@@ -60,6 +60,7 @@
   -D --dst      :  path to dir where jar file is placed (default: dst)
   -R --res      :  path to dir which is included in jar-file (default: res)
   -p --pack     :  include dependency libs to produce a stand alone jar
+  -w --war      :  put class files under 'WEB-INF/classes' in jar file
   -d --doc      :  produce javadoc for project, with some sane defaults
   -N --nolink   :  do not add '-linksource' argument for javadoc
   -n --name     :  name of jar file containing project (default: a.jar)
@@ -111,13 +112,8 @@ config['-htm']        = 'htm' # -H
 config['-res']        = 'res' # -R
 config['-lib']        = 'lib' # -L
 config['-dst']        = 'dst' # -D
-config['-name']       = 'a.jar' # -n
-config['-strip']      = '.hg,.git,.svn,.bzr' # -s
-config['-javahome']   = os.environ.get('JAVA_HOME')
-config['-classpath']  = os.environ.get('CLASSPATH')
-config['-link']       = 'http://docs.oracle.com/javase/6/docs/api/' 
-config['-main']       = None
-config['-manifest']   = None
+config['-main']       = None  # -m
+config['-manifest']   = None  # -M
 config['-output']     = None  # -o
 config['-nolink']     = False # -N
 config['-full']       = False # -f
@@ -130,8 +126,14 @@ config['-help']       = False # -h
 config['-list']       = False # -l
 config['-zlib']       = False # -z
 config['-dryrun']     = False #
+config['-war']        = False # -w
 config['-quiet']      = False # -q
 config['-version']    = False # -v
+config['-name']       = 'a.jar' # -n
+config['-strip']      = '.hg,.git,.svn,.bzr' # -x
+config['-javahome']   = os.environ.get('JAVA_HOME')
+config['-classpath']  = os.environ.get('CLASSPATH')
+config['-link']       = 'http://docs.oracle.com/javase/6/docs/api/' 
 config['windows']     = sys.platform.startswith('win')
 config['xargs']       = []
 
@@ -251,10 +253,11 @@ def init_parser():
     pyopt.add_bool('-q -quiet --quiet')
     pyopt.add_bool('-z -zlib --zlib')
     pyopt.add_bool('-dryrun --dryrun')
-    pyopt.add_bool('-d -doc --doc')
+    pyopt.add_bool('-d -doc --doc doc')
     pyopt.add_bool('-u -dep --dep')
     pyopt.add_bool('-f -full --full')
     pyopt.add_bool('-l -list --list')
+    pyopt.add_bool('-w -war --war')
     pyopt.add_bool('-p -pack --pack')
     pyopt.add_bool('-N -nolink --nolink')
     pyopt.add_bool('-t -test --test test')
@@ -288,6 +291,7 @@ def parse_args( argv ):
     if pyopt.is_set('-version'): config['-version'] = True
     if pyopt.is_set('-quiet')  : config['-quiet']   = True
     if pyopt.is_set('-zlib')   : config['-zlib']    = True
+    if pyopt.is_set('-war')    : config['-war']     = True
     if pyopt.is_set('-dep')    : config['-dep']     = True
     if pyopt.is_set('-list')   : config['-list']    = True
     if pyopt.is_set('-full')   : config['-full']    = True
@@ -476,7 +480,7 @@ def find_outdated_pkgs( pkgs ):
     """
 
     # no pkg can be up-to-date if this dir is missing
-    if not os.path.isdir(config['-obj']):
+    if not os.path.isdir(config['-obj']) or config['-full']:
         for k in pkgs:
             pkgs[k].make = True
     else:
@@ -514,7 +518,7 @@ def javac_outdated_pkgs( pkgs ):
         dir_or_mkdir( config['-obj'] )
 
     info("compiling: %d/%d packages\n",pkg_mk_count, len(pkgs))
-    run_cmd(cmd, config['-dryrun'])
+    run_cmd(cmd, config['-dryrun'], 'compile failed')
 
     return True
 
@@ -555,7 +559,10 @@ def zip_objs( pkgs, done_stuff ):
         zip_fh.write(manifest_path, manifest_zip_path)
 
         for f in path_walk(config['-obj'], class_matcher, None):
-            zip_fh.write(f, f[len(config['-obj'])+1:])
+            out_name = f[len(config['-obj'])+1:]
+            if config['-war']: # special case we are building a war file
+                out_name = os.path.join('WEB-INF','classes',out_name)
+            zip_fh.write(f, out_name)
         zip_fh.close()
 
         return jar_file
@@ -847,6 +854,14 @@ def normalize_paths():
         config[e] = os.path.normpath(config[e])
 
 
+def expand_variables():
+    """ expand shell variables + HOME shortcut tilde [~] """
+    for k in config:
+        if config[k] and isinstance(config[k], basestring):
+            config[k] = os.path.expanduser(config[k])
+            config[k] = os.path.expandvars(config[k])
+
+
 def dep_info_exit( pkgs ):
     """ print dependency info gathered (with regexp!) """
     for k in pkgs:
@@ -892,6 +907,8 @@ def main():
     parse_args( sys.argv[1:] )
     # remove traling '/' and so on.
     normalize_paths()
+    # expand shell variables $HOME/$PWD... or %USERDIR% on Windows
+    expand_variables()
     # do simple options [-version,-help,-clean,-list]
     if config['-list']   : list_settings_exit()
     if config['-help']   : echo_exit( __doc__ )
@@ -911,9 +928,7 @@ def main():
     else:
         jdk_sanity('javac.exe' if config['windows'] else 'javac')
     # fetch java files
-    files = path_walk(config['-src'],
-                      matcher,
-                      config['-strip']);
+    files = path_walk(config['-src'], matcher, config['-strip']);
     if not files:
         if os.path.isdir(config['-src']):
             echo_exit("No java files found in: %s"% config['-src'], 1)
@@ -1118,14 +1133,17 @@ def path_walk(dir_name, criteria, exclude):
 
 
 #TODO pretty print command
-def run_cmd(cmd, dryrun=False):
+def run_cmd(cmd, dryrun=False, errmsg=''):
     """ run a command in subprocess || print command """
     if dryrun:
         pretty_print( cmd )
     else:
         fail = subprocess.call(cmd)
         if fail:
-            die("cmd failed: %s\n", ' '.join(cmd))
+            if not errmsg:
+                die("cmd failed: %s\n", ' '.join(cmd))
+            else:
+                die("%s\n", errmsg)
 
 
 def pretty_print(cmd, maxwidth=79):

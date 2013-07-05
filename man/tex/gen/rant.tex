@@ -1,0 +1,179 @@
+
+\section{ Rant }
+
+This chapter can be skipped, it's just personal opinions.
+
+
+
+\subsection{ Ant }
+
+ \href{http://ant.apache.org}{Ant} is one of the older build tools for Java, and
+the default way to build projects for most IDE's, it can be configured to
+do just about anything. My only problem with Ant is that is its
+configuration has become nothing more than a massive template I keep
+dragging from project to project.  I typically place my dependencies in a
+directory called \texttt{lib}, and add them to my \texttt{CLASS\_PATH} etc.  I've never
+remembered how to specify these targets inside the \texttt{build.xml}, so I need
+my template or google nearby.  But since my template has stayed basically
+the same for years, what I really wanted was some tool that did not require
+any configuration for a plain setup, and if I had to do any
+configuration; it should not be done with \textit{XML}.
+
+
+
+
+\subsection{ Maven }
+
+ \href{http://maven.apache.org}{Maven} is newer than Ant and ships with more
+features out of the box, some which are \textbf{very} attractive at first sight.
+
+\begin{itemize}
+
+\item{ Calculates and downloads recursive dependencies}
+
+\item{ Little configuration needed for typical setup (relatively)}
+
+\end{itemize}
+
+
+I started using Maven a while back and I have always been sort of content
+with it; perhaps not the fastest tool around, but it did what was advertised.
+It's only after I started using it for work purposes that I
+started to realize the mess you can end up in with this tool; I'll try
+to give a summary.
+
+
+
+\subsection{ Dependencies }
+
+It sounds like a good idea; all you have to do is to specify a dependency
+and its version and voilà, the package and all its recursive dependencies are
+fetched for you, but fist a couple of questions:
+
+\begin{enumerate}
+
+\item{ Have you ever built a Maven project without knowing what you depend on?}
+
+\item{ Do you regularly check your dependencies and their recursive dependencies to make sure they are up to date with the latest version of the library?}
+
+\end{enumerate}
+
+
+If you answer \textbf{yes} on both of these questions, then Maven is clearly
+the tool for you, but in my experience this practically never happens.
+
+
+
+\subsection{ Repositories }
+
+Naturally Maven fetches its dependencies from repositories, but what has
+really been making a mess out of projects I've come across in the last year
+is that these repositories are not static. Where I work there are several
+projects that will not build \textit{unless} you copy your coworkers
+\texttt{\$HOME/.m2} directory over to your machine first. The repositories where
+these dependencies stem from are dead, or the packages we are looking for
+(in that version) is nowhere to be found. Was it removed because
+it was \textit{buggy/insecure/awful}? Who knows; it's gone and nobody knows what
+that library was up to, it's was a recursive dependency far down the
+rabbit-hole of some massive project.
+
+
+
+\subsubsection{ Private Repositories }
+
+In order to avoid copying coworkers \texttt{\$HOME/.m2} we naturally created
+private repositories, basically we have our own \textbf{graveyard} repository of
+all the dead libraries we depend on, not exactly an ideal solution.
+
+
+
+\subsubsection{ Dynamic Repositories }
+
+The fact that repositories modify their content and fail to contain
+packages forever more cannot be blamed on Maven. The only fault Maven
+has in all of this is their treatment of dependencies, Maven treats
+dependencies as nothing but a build-requirement that \textit{it} can  take care
+of.  This quickly creeps into your mindset and pretty soon you sit there
+scratching your head like an  IDE-user who's baffled about loosing
+oversight on a project. That is what IDE's are good at, \textbf{giving you a
+false sense of oversight}, just like an automated dependency fetcher is
+good at distancing you from the mess you import into your project.
+
+
+
+\subsubsection{ Technical? }
+
+Maven's biggest weakness in my opinion is not technical, it's political;
+i.e. I think it leads to thoughtless dependencies and zero quality
+control of the source imported into a project. The best way to solve this
+problem is \textbf{not} to solve it; since there is no way of doing this
+automatically and keep any form of discipline regarding imports.
+
+
+
+\subsection{ Captain Slow }
+
+Any Java based project must be forgiven for a bit of overhead with the
+JVM startup and so on, but with Maven, it's not just a little overhead
+that can be forgiven; I'll illustrate with an example.
+
+
+\subsubsection{ Example }
+
+
+{\small
+\begin{verbatim}
+
+user@host:cop (hg) $ time mvn compile
+[INFO] Scanning for projects...
+[INFO] ------------------------------------------------------
+[INFO] Building cop
+[INFO]    task-segment: [compile]
+[INFO] ------------------------------------------------------
+[INFO] [resources:resources {execution: default-resources}]
+[INFO] Using 'UTF-8' encoding to copy filtered resources.
+[INFO] [compiler:compile {execution: default-compile}]
+[INFO] Nothing to compile - all classes are up to date
+[INFO] ------------------------------------------------------
+[INFO] BUILD SUCCESSFUL
+[INFO] ------------------------------------------------------
+[INFO] Total time: 2 seconds
+[INFO] Finished at: Thu Mar 21 00:42:22 CET 2013
+[INFO] Final Memory: 13M/85M
+[INFO] ------------------------------------------------------
+
+real    0m3.957s
+user    0m6.060s
+sys     0m0.312s
+\end{verbatim}
+}
+
+
+The project isn't very big, a line count of about 6400, and sloc of
+4138 according to David A. Wheeler's SLOCCount. My computer is a Thinkpad
+X301 with a 1.4 GHz dual core processor. What really bugs me is this:
+
+
+{\small
+\begin{verbatim}
+[INFO] Nothing to compile - all classes are up to date
+\end{verbatim}
+}
+
+
+combined with this:
+
+
+{\small
+\begin{verbatim}
+> time javac -d target/classes $(find src/main -name '*.java')
+
+real    0m1.590s
+user    0m2.012s
+sys     0m0.128s
+\end{verbatim}
+}
+
+
+It's actually \textbf{faster to build the entire project twice}, than for Maven
+to calculate that \textbf{nothing} has to be done, \textit{all classes are up to date}.

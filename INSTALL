@@ -2,40 +2,16 @@
 Dependencies
 ======================================================
 
-* python
-* bash-completion
-
+ * jdk
+ * python
+ * bash-completion (optional but handy)
 
 ======================================================
 Install
 ======================================================
 
-As super-user you have 2 choices:
+ Copy the file bin/jz to a directory beloning to your
+ PATH variable, or add the bin/ directory here to your
+ PATH
 
-
-    1. sudo make install
- *  2. make debian && sudo dpkg -i jc_v1.0_all.deb
-
-
-As regular user you have 2 choices:
-
-    1. copy bin/ag to some PATH location
-    2. add $PWD/bin to your PATH variable.
-
-
-* if you don't have a Debian based distro
-  you can convert the deb to your distro with
-  'alien', it's not ideal but it should work.
-
-
-======================================================
-RPM Distro
-======================================================
-
-If you have a RPM based system (RedHat/SuSE etc) use
-alien to convert debian package to rpm.
-
-
-make debian &&\
-     sudo alien --to-rpm jc_v1.0_all.deb\
-     sudo rpm -i jc-1.0-2.noarch.rpm
+TODO write build scripts etc

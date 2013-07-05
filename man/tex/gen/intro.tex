@@ -1,0 +1,84 @@
+
+\section{ Intro }
+
+The setup required to use  \href{http://ant.apache.org}{Ant} or
+ \href{http://maven.apache.org}{Maven} can be a bit too much for
+small/medium sized Java projects. Naturally the JVM startup time,
+and Ant/Maven's shared love of XML are also pretty good reasons
+for an alternative approach.
+
+
+
+
+\subsection{ Convention }
+
+For convention to replace configuration something has to be said about
+the conventions; hopefully this will be similar to how most Java projects
+are organized anyway. Assuming we are starting project \texttt{x}, this setup
+should do.
+
+
+{\small
+\begin{verbatim}
+
+x/
+ `-- src/      # source code is placed here
+
+\end{verbatim}
+}
+
+
+After you have written some code and placed it the \texttt{src} folder, you
+could do something like this assuming you have \texttt{jz} installed, or the
+\texttt{jz} file itself could be placed into the \texttt{x} directory and you could
+type \texttt{./jz} instead.
+
+
+{\small
+\begin{verbatim}
+
+user@host:~/project/x$ jz
+compiling: 1/1 packages
+zip it up: dst/a.jar
+time used: 0.736 seconds
+
+\end{verbatim}
+}
+
+
+After your project finished compiling you will see that two new directories
+have been created: \texttt{obj} and \texttt{dst}.
+
+
+{\small
+\begin{verbatim}
+
+x/
+ |-- src/      # still just source here..
+ |-- obj/      # class files end up here
+ `-- dst/      # destination of jar archive
+
+\end{verbatim}
+}
+
+
+\texttt{obj} contains the compiled java-classes, and the \texttt{dst} directory holds a
+jar/zip archive where the java-classes from the \texttt{obj} directory and a
+\texttt{MANIFEST.MF} file (with some build info) are contained in side \texttt{a.jar}.
+
+
+
+{\small
+\begin{verbatim}
+
+x/
+ |-- src/      # source code goes here
+ |-- lib/      # dependencies goes here
+ |-- obj/      # class files end up here
+ |-- dst/      # jar archive ends up in this directory
+ |-- htm/      # html for Javadoc ends up here
+ `-- res/      # resources to be included into jar goes here
+
+\end{verbatim}
+}
+
