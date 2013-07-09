@@ -429,20 +429,6 @@ def find_pkgs(files):
             dep += im
     
         ent = main_regex.search( lns )
-## 
-##         for line in fh.readlines():
-## 
-##             m = pkg_regex.match( line )
-##             if m: pk = m.group(1)
-## 
-##             m = imprt_regex.match( line )
-##             if m: dep.append( m.group(1))
-## 
-##             # not safe, we ignore comments :-)
-##             #m = stop_regex.match( line )
-##             #if m: break
-## 
-##         fh.close()
 
         if not pk:
             pk = '.' # dummy package (illegal Java package name)
@@ -1250,6 +1236,7 @@ def wget(link, HEADERS={}):
 # ______________________________________________________________ Pyopt
 
 # getopt   - cannot parse arguments mixed with options
+#            (that was wrong gnu_
 # optparse - very complex and shitty library IMO
 
 class Option(object):
