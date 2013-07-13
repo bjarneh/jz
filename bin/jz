@@ -259,7 +259,6 @@ def init_parser():
     pyopt.add_bool('-p -pack --pack')
     pyopt.add_bool('-N -nolink --nolink')
     pyopt.add_bool('-t -test --test test')
-    pyopt.add_str_fancy('--javahome')
     pyopt.add_str_fancy('-x --strip')
     pyopt.add_str_fancy('-S --src')
     pyopt.add_str_fancy('-O --obj')
@@ -891,7 +890,7 @@ def main():
     parse_args( sys.argv[1:] )
     # remove traling '/' and so on.
     normalize_paths()
-    # expand shell variables $HOME/$PWD... or %USERDIR% on Windows
+    # expand shell variables $HOME/$PWD... %USERDIR% etc. on Windows
     expand_variables()
     # do simple options [-version,-help,-clean,-list]
     if config['-list']   : list_settings_exit()
@@ -1236,7 +1235,7 @@ def wget(link, HEADERS={}):
 # ______________________________________________________________ Pyopt
 
 # getopt   - cannot parse arguments mixed with options
-#            (that was wrong gnu_
+#            (i was wrong; gnu_getopt does that, oh well...)
 # optparse - very complex and shitty library IMO
 
 class Option(object):
@@ -1294,25 +1293,38 @@ class Pyopt(object):
         self.options = {}
 
     def add_bool(self, flag_str):
-        """ option/flag that does not take argument"""
+        """ option/flag that requires no argument(s)"""
         flags = flag_str.split()
         b = BoolOption(flags)
-        for f in flags:
-            self.options[f] = b
+        self.add_flag(flags, b)
 
     def add_str(self, flag_str):
         """ option/flag that take(s) argument(s)"""
         flags = flag_str.split()
         s = StrOption(flags)
-        for f in flags:
-            self.options[f] = s
+        self.add_flag(flags, s)
 
     def add_str_fancy(self, flag_str):
         """ same as add_str but make flag fancy first"""
         fancy = self.make_fancy(flag_str)
         s = StrOption(fancy)
-        for f in fancy:
-            self.options[f] = s
+        self.add_flag(fancy, s);
+
+    def add_flag(self, flags, option):
+        """ flags meaning the same point to same option"""
+        used = self.in_use(flags)
+        if used:
+            sys.stderr.write("[WARNING] '%s' flag already in use"%(used))
+        else:
+            for f in flags:
+                self.options[f] = option
+
+    def in_use(self, flags):
+        """ assert that we do not have option conflicts"""
+        for f in flags:
+            if f in self.options:
+                return f
+        return None
 
     def make_fancy(self, flag_str):
         """
@@ -1340,7 +1352,6 @@ class Pyopt(object):
         hash_set = set(self.options.values())
         for o in hash_set:
             o.reset()
-
 
     def is_set(self, flag):
         return self.options[flag].is_set()
