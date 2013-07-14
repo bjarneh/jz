@@ -74,13 +74,7 @@
 """
 
 
-# javadoc\
-# -classpath lib/junit.jar\
-# -linksource -d doc\
-# -link http://docs.oracle.com/javase/6/docs/api/
-
 # ______________________________________________________________ imports
-
 
 import os         # os independent?
 import re         # parse with regexp
@@ -92,7 +86,6 @@ import zipfile    # write zip (jar) files
 #import cProfile  # run profile tool
 import traceback  # print stacktrace
 import subprocess # run external commands
-
 
 # ______________________________________________________________ globals
 
@@ -605,7 +598,6 @@ def clean():
     sys.exit(0)
 
 
-#TODO add legal javadoc options
 def javadoc(files):
     """ run javadoc on src """
 
@@ -677,13 +669,13 @@ def junit_sanity():
         answ = raw_input(" \n JUnit not found, download it? [Y/n]: ")
         answ = answ.lower()
         if not answ or answ in ['y', 'yes']:
-            print(" Downloading.... junit.jar\n")
+            print(" Downloading.... junit-4.11.jar\n")
             dir_or_mkdir( config['-lib'] )
-            junit_lib = wget("http://bjarneh.at.ifi.uio.no/junit.jar")
-            fh = open(os.path.join(config['-lib'], 'junit.jar'), 'w')
+            junit_lib = wget("http://bjarneh.at.ifi.uio.no/junit-4.11.jar")
+            fh = open(os.path.join(config['-lib'], 'junit-4.11.jar'), 'w')
             fh.write( junit_lib )
             fh.close()
-            junit_location = os.path.join( config['-lib'], 'junit.jar' )
+            junit_location = os.path.join( config['-lib'], 'junit-4.11.jar' )
             config['-classpath'] += (os.pathsep + junit_location)
         else:
             sys.stderr.write(" Ok, goodbye..\n\n")
