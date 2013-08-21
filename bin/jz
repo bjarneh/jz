@@ -149,6 +149,9 @@ junit_regex = re.compile(r"""junit[\d\-.]*\.jar""")
 # command line parser
 pyopt = None
 
+# plugins
+plugins = {}
+
 # ______________________________________________________________ templates
 
 # junit template to run the unit tests
@@ -678,8 +681,7 @@ def junit_sanity():
             junit_location = os.path.join( config['-lib'], 'junit-4.11.jar' )
             config['-classpath'] += (os.pathsep + junit_location)
         else:
-            sys.stderr.write(" Ok, goodbye..\n\n")
-            sys.exit(1)
+            die(" Ok, goodbye..\n\n")
 
 
 def junit():
@@ -819,7 +821,10 @@ def info(fmt, *args):
 
 def echo_exit(something, status=0):
     """ echo something and exit with status """
-    sys.stdout.write(something + '\n')
+    if status != 0:
+        sys.stderr.write(something + '\n')
+    else:
+        sys.stdout.write(something + '\n')
     sys.exit( status )
 
 

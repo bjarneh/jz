@@ -11,7 +11,7 @@
 \usepackage{tikz}
 \usepackage{fancyvrb}
 \usepackage[T1]{fontenc}
-\usepackage{times}
+%% \usepackage{times}
 %% \usepackage{bookman}
 \usepackage{amsmath}
 \usepackage{listings}
@@ -32,18 +32,20 @@
 \hfil
 \begin{tikzpicture}[overlay]
 %%% color frontpage
-%%    \fill [fill=black!100]
-   \fill [fill=white!70]
+   \fill [fill=black!100]
+%%    \fill [fill=white!70]
     (-.50\paperwidth,-.84\paperheight)
     rectangle
     (.51\paperwidth,.177\paperheight);
-   \node [scale=7,black,opacity=1] at (-0.6,-8.7) {j};
-   \node [scale=7,black,opacity=1] at (0.05,-8.8) {z};
+%%    \node [scale=7,black,opacity=1] at (-0.6,-8.7) {j};
+%%    \node [scale=7,black,opacity=1] at (0.05,-8.8) {z};
 %%    \node [scale=7,color=white!100,opacity=1] at (-0.6,-8.7) {j};
 %%    \node [scale=7,color=white!100,opacity=1] at (0.05,-8.8) {z};
+    \node [scale=7,color=yellow!100,opacity=1] at (-0.6,-8.7) {\texttt{j}};
+    \node [scale=7,color=yellow!100,opacity=1] at (0.25,-8.7) {\texttt{z}};
    \node at (7,-21.5) [color=red!100,opacity=.5,scale=1.1] {\texttt{MANUAL v1.0}};
-%%    \node at (-2,-9) [color=white!50,opacity=.15,scale=1.25] {
-   \node at (-2,-9) [color=black!50,opacity=.15,scale=1.25] {
+   \node at (-2,-9) [color=white!50,opacity=.15,scale=1.25] {
+%%    \node at (-2,-9) [color=black!50,opacity=.15,scale=1.25] {
        \begin{minipage}{\linewidth}
         \begin{Verbatim}
     <dependencies>
