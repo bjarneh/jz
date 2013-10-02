@@ -11,7 +11,7 @@
 \usepackage{tikz}
 \usepackage{fancyvrb}
 \usepackage[T1]{fontenc}
-%% \usepackage{times}
+\usepackage{times}
 %% \usepackage{bookman}
 \usepackage{amsmath}
 \usepackage{listings}
@@ -41,56 +41,61 @@
 %%    \node [scale=7,black,opacity=1] at (0.05,-8.8) {z};
 %%    \node [scale=7,color=white!100,opacity=1] at (-0.6,-8.7) {j};
 %%    \node [scale=7,color=white!100,opacity=1] at (0.05,-8.8) {z};
+%%     \draw[rotate=45, line width=1ex] [orange] (-7.9,-7.9) rectangle (-3.5,-3.5);
+    \draw [line width=1ex, opacity=.1] [blue] (-1.5,-10.0) rectangle +(2.5,2.5);
     \node [scale=7,color=yellow!100,opacity=1] at (-0.6,-8.7) {\texttt{j}};
-    \node [scale=7,color=yellow!100,opacity=1] at (0.25,-8.7) {\texttt{z}};
-   \node at (7,-21.5) [color=red!100,opacity=.5,scale=1.1] {\texttt{MANUAL v1.0}};
-   \node at (-2,-9) [color=white!50,opacity=.15,scale=1.25] {
+    \node [scale=7,color=yellow!100,opacity=1] at (0.20,-8.77) {\texttt{z}};
+    \node at (7,-21.5) [color=red!100,opacity=.5,scale=1.1] {\texttt{MANUAL v1.0}};
+    \node at (-2,-9) [color=white!50,opacity=.15,scale=1.25] {
+
 %%    \node at (-2,-9) [color=black!50,opacity=.15,scale=1.25] {
        \begin{minipage}{\linewidth}
         \begin{Verbatim}
-    <dependencies>
-        <dependency>
-            <groupId>junit</groupId>
-            <artifactId>junit</artifactId>
-            <version>${junit-version}</version>
-            <scope>test</scope>
-        </dependency>
-    </dependencies>
-    <build>
-        <pluginManagement>
-            <plugins>
-                <plugin>
-                    <groupId>org.apache.maven.plugins</groupId>
-                    <artifactId>maven-compiler-plugin</artifactId>
-                    <version>2.3.2</version>
-                    <configuration>
-                        <source>${maven.compiler.source}</source>
-                        <target>${maven.compiler.target}</target>
-                    </configuration>
-                </plugin>
-            </plugins>
-        </pluginManagement>
+<dependencies>
+    <dependency>
+        <groupId>junit</groupId>
+        <artifactId>junit</artifactId>
+        <version>${junit-version}</version>
+        <scope>test</scope>
+    </dependency>
+</dependencies>
+<build>
+    <pluginManagement>
         <plugins>
             <plugin>
-                <artifactId>maven-surefire-plugin</artifactId>
-                <version>${surefire-version}</version>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>2.3.2</version>
                 <configuration>
-                    <forkMode>once</forkMode>
-                    <useSystemClassLoader>false</useSystemClassLoader>
-                    <useManifestOnlyJar>false</useManifestOnlyJar>
-                    <failIfNoTests>false</failIfNoTests>
-                    <includes>
-                        <include>**/*Test.*</include>
-                    </includes>
-                    <excludes>
-                    </excludes>
-                    <systemProperties>
-                        <project.version>${project.version}</project.version>
-                    </systemProperties>
+                    <source>${maven.compiler.source}</source>
+                    <target>${maven.compiler.target}</target>
                 </configuration>
             </plugin>
         </plugins>
-    </build>
+    </pluginManagement>
+    <plugins>
+        <plugin>
+            <artifactId>maven-surefire-plugin</artifactId>
+            <version>${surefire-version}</version>
+            <configuration>
+                <forkMode>once</forkMode>
+                <useSystemClassLoader>false</useSystemClassLoader>
+                <useManifestOnlyJar>false</useManifestOnlyJar>
+                <failIfNoTests>false</failIfNoTests>
+                <includes>
+                    <include>**/*Test.*</include>
+                </includes>
+                <excludes>
+                </excludes>
+                <systemProperties>
+                    <project.version>
+                       ${project.version}
+                    </project.version>
+                </systemProperties>
+            </configuration>
+        </plugin>
+    </plugins>
+</build>
     \end{Verbatim}
     \end{minipage}
     };

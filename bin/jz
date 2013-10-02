@@ -38,7 +38,7 @@
 
 
 """
- jz - java compilation, zipping etc.
+ jz - java compilation, testing, zipping etc.
 
  usage: jz [OPTIONS]
 
@@ -593,7 +593,7 @@ def clean():
 
     for e in ['-obj','-htm', '-dst']:
         if os.path.isdir( config[e] ):
-            info('rmdir: %s\n' % config[e])
+            info('rm -rf: %s\n' % config[e])
             rm_rf( config[e] )
             parent = os.path.dirname(config[e])
             if parent:
@@ -1158,6 +1158,7 @@ def rm_empty_dirs(d):
     if not os.path.isdir(d): return
     while d and not os.listdir(d):
         tmp = os.path.dirname(d)
+        info('rmdir : %s\n' % config[e])
         os.rmdir(d)
         d = tmp
 
