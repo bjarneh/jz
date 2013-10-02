@@ -166,7 +166,7 @@ combined with this:
 
 {\small
 \begin{verbatim}
-> time javac -d target/classes $(find src/main -name '*.java')
+$ time javac -d target/classes $(find src/main -name '*.java')
 
 real    0m1.590s
 user    0m2.012s
@@ -177,3 +177,30 @@ sys     0m0.128s
 
 It's actually \textbf{faster to build the entire project twice}, than for Maven
 to calculate that \textbf{nothing} has to be done, \textit{all classes are up to date}.
+
+
+
+\subsubsection{ What? }
+
+If you did not look closely, you may have missed a pretty strange detail
+in the previous section, look at this once again:
+
+
+{\small
+\begin{verbatim}
+$ javac -d target/classes $(find src/main -name '*.java')
+\end{verbatim}
+}
+
+
+Did \texttt{find} magically spit out the source code in the correct build order
+or does \texttt{javac} actually sort them? I.e. if \texttt{javac} calculates build order
+there really isn't much left to do for a build tool, part from checking
+timestamps to see which files are up to date.
+
+
+
+\subsubsection{ \texttt{javac} }
+
+As we just saw; \texttt{javac} is \textit{almost} a build tool.
+
