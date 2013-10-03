@@ -646,7 +646,7 @@ def rm_junit_template(fname, arg=None):
     """ remove the junit template code from 'src' dir """
     d = os.path.dirname(fname)
     os.unlink(fname)
-    rm_empty_dirs(d)
+    rm_empty_dirs(d, True)
 
 
 def junit_sanity():
@@ -1153,12 +1153,13 @@ def rm_rf(d):
     os.rmdir(d)
 
 
-def rm_empty_dirs(d):
+def rm_empty_dirs(d, silent=False):
     """ remove empty dirs recursively """
     if not os.path.isdir(d): return
     while d and not os.listdir(d):
         tmp = os.path.dirname(d)
-        info('rmdir : %s\n' % config[e])
+        if not silent:
+            info('rmdir : %s\n' % d)
         os.rmdir(d)
         d = tmp
 
