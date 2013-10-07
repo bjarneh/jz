@@ -1141,7 +1141,7 @@ def pretty_print(cmd, maxwidth=79):
 
     sys.stdout.write("\n")
 
-#FIXME
+#FIXME report meaningful feedback when you lack rights
 def rm_rf(d):
     """ rm -rf modified from activestate: 552732"""
     if not os.path.isdir(d): return
