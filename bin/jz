@@ -140,8 +140,8 @@ stop_regex  = re.compile(r"""^\s*(final|public|class|interface|enum)\s+.*$""")
 # 1: public static void main(String[] args)
 # 2: public static void main(String args[])
 # 3: public static void main(String... args)
-main_start  = r"""public\s+static\s+void\s+main\s*\("""
-main_stop   = r"""String(\[\]\s+arg(s|v)|\s+arg(v|s)\[\]|\s*\.\.\.\s+arg(s|v))\s*\)"""
+main_start  = r"""public\s+static\s+void\s+main\s*\(\s*String"""
+main_stop   = r"""(\[\]\s+arg(s|v)|\s+arg(v|s)\[\]|\s*\.\.\.\s+arg(s|v))\s*\)"""
 main_regex  = re.compile(main_start + main_stop)
 # regexp to look for junit library
 junit_regex = re.compile(r"""junit[\d\-.]*\.jar""")
@@ -560,7 +560,7 @@ def write_manifest(to_dir):
         fh_user_manifest.close()
     else:
         fh.write('Manifest-Version: 1.0\n')
-        fh.write('JC-Version: jz 1.0\n')
+        fh.write('JZ-Version: jz 1.0\n')
         fh.write('Created-By: jz 1.0\n')
         if config['-main']:
             fh.write('Main-Class: %s\n'% config['-main'])
@@ -591,7 +591,7 @@ def add_resources():
 def clean():
     """ remove compiled code + javadoc etc """
 
-    for e in ['-obj','-htm', '-dst']:
+    for e in ['-obj', '-htm', '-dst']:
         if os.path.isdir( config[e] ):
             info('rm -rf: %s\n' % config[e])
             rm_rf( config[e] )
@@ -1141,7 +1141,7 @@ def pretty_print(cmd, maxwidth=79):
 
     sys.stdout.write("\n")
 
-
+#FIXME
 def rm_rf(d):
     """ rm -rf modified from activestate: 552732"""
     if not os.path.isdir(d): return
