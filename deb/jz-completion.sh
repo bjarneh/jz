@@ -60,6 +60,7 @@ _jz(){
              -extdirs
              -footer
              -full
+             -fast
              -g
              -g:lines
              -g:none

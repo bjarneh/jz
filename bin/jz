@@ -51,6 +51,7 @@
   -u --dep      :  print dependency information gathered
   -z --zlib     :  compress zip-files (jar-archives) with zlib
   -f --full     :  compile entire project, not only modified files
+  -F --fast     :  compile project as fast as possible (only modified files)
   -c --clean    :  remove class-files, jar-file, and javadoc html
   -t --test     :  run unit-tests using junit (will be downloaded)
   -S --src      :  path to a source root (default: src)
@@ -110,6 +111,7 @@ config['-manifest']   = None  # -M
 config['-output']     = None  # -o
 config['-nolink']     = False # -N
 config['-full']       = False # -f
+config['-fast']       = False # -F
 config['-pack']       = False # -p
 config['-doc']        = False # -d
 config['-dep']        = False # -u
@@ -250,6 +252,7 @@ def init_parser():
     pyopt.add_bool('-d -doc --doc doc')
     pyopt.add_bool('-u -dep --dep')
     pyopt.add_bool('-f -full --full')
+    pyopt.add_bool('-F -fast --fast')
     pyopt.add_bool('-l -list --list')
     pyopt.add_bool('-w -war --war')
     pyopt.add_bool('-p -pack --pack')
@@ -288,6 +291,7 @@ def parse_args( argv ):
     if pyopt.is_set('-dep')    : config['-dep']     = True
     if pyopt.is_set('-list')   : config['-list']    = True
     if pyopt.is_set('-full')   : config['-full']    = True
+    if pyopt.is_set('-fast')   : config['-fast']    = True
     if pyopt.is_set('-pack')   : config['-pack']    = True
     if pyopt.is_set('-nolink') : config['-nolink']  = True
 
@@ -485,9 +489,14 @@ def javac_outdated_pkgs( pkgs ):
     # assume user knows what he || she is adding
     if config['xargs']: cmd += config['xargs']
 
+    tmp_len = len(cmd)
+
     for k in pkgs:
         if pkgs[k].make:
-            cmd += pkgs[k].files
+            if config['-fast']:
+                cmd += pkgs[k].modified(config['-obj'])
+            else:
+                cmd += pkgs[k].files
             pkg_mk_count += 1
 
     if pkg_mk_count == 0:
@@ -496,7 +505,10 @@ def javac_outdated_pkgs( pkgs ):
     if not config['-dryrun']:
         dir_or_mkdir( config['-obj'] )
 
-    info("compiling: %d/%d packages\n",pkg_mk_count, len(pkgs))
+    if config['-fast']:
+        info("compiling: %d files\n", len(cmd) - tmp_len)
+    else:
+        info("compiling: %d/%d packages\n", pkg_mk_count, len(pkgs))
     run_cmd(cmd, config['-dryrun'], 'compile failed')
 
     return True
@@ -921,7 +933,8 @@ def main():
     # debug option, prints dependency info
     if config['-dep']: dep_info_exit( pkgs )
     # create links from parents to children
-    build_dep_graph( pkgs )
+    if not config['-fast']:
+        build_dep_graph( pkgs )
     # calculate which packages need to be compiled
     find_outdated_pkgs( pkgs )
     # compile outdated packages
@@ -979,13 +992,36 @@ class Pkg(object):
         """ a package 'c' depends on us """
         self.child.add(c)
 
+    def modified(self, obj_root):
+        """ only return modified files; for -fast option """
+
+        modified_files = []
+
+        # where we can expect to find compiled output
+        if self.name == '.': # special case no package name
+            root = obj_root
+        else:
+            root = os.path.join(obj_root, self.name.replace('.', os.sep))
+
+        for f in self.files:
+            f_class = os.path.basename(f)[:-5] + '.class'
+            f_path  = os.path.join(root, f_class)
+            if os.path.isfile( f_path ):
+                java_mod  = os.stat(f).st_mtime
+                class_mod = os.stat(f_path).st_mtime
+                if java_mod > class_mod:
+                    modified_files.append( f )
+            else:
+                modified_files.append( f )
+
+        return modified_files
+
     def stat_compare(self, obj_root):
         """
         stat .class files and .java files to
         compare the modified timestamp. i.e.
         compile if .java is newer than .class
         """
-
 
         # where we can expect to find compiled output
         if self.name == '.': # special case no package name
@@ -1022,7 +1058,6 @@ class Pkg(object):
                 if class_mod > newest:
                     newest = class_mod
         return newest
-
 
     def needs_make(self):
         """
