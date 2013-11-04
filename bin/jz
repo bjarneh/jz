@@ -80,6 +80,7 @@
 import os         # os independent?
 import re         # parse with regexp
 import sys        # printing/argv/exit
+import imp        # import dynamic modules
 import time       # do some basic timing
 import atexit     # delete tmp files on exit
 #import urllib2   # moved to 'wget' [adds overhead]
@@ -137,7 +138,7 @@ config['xargs']       = []
 pkg_regex   = re.compile(r"""package\s+([\w.\-_\d]+);""")
 imprt_regex = re.compile(r"""import\s+([\w.\-_\d]+)\.[^\.;]+;""")
 imprt2_regx = re.compile(r"""import\s+static\s+([\w.\-_\d]+)\.[\w.\-_\d]+\.[^\.;]+;""")
-stop_regex  = re.compile(r"""^\s*(final|public|class|interface|enum)\s+.*$""")
+###stop_regex  = re.compile(r"""^\s*(final|public|class|interface|enum)\s+.*$""")
 # main regex will match (args can be argv as well)
 # 1: public static void main(String[] args)
 # 2: public static void main(String args[])
@@ -274,9 +275,87 @@ def init_parser():
     pyopt.add_str_fancy('--classpath')
 
 
+def init_plugins():
+    """ look for plugins and initialize """
+
+    pwd  = os.getcwd()
+    xdg  = os.environ.get('XDG_CONFIG_HOME')
+    home = os.environ.get('HOME') or os.environ.get('USERPROFILE')
+
+    if not xdg and home:
+        xdg = os.path.join(home, '.config')
+
+    plugin_dirs = []
+    plugin_files = []
+
+    if pwd:
+        p = os.path.join(pwd, '.jz', 'plugins')
+        if os.path.isdir( p ):
+            plugin_dirs.append( p )
+    if home:
+        p = os.path.join(home, '.jz', 'plugins')
+        if os.path.isdir( p ):
+            plugin_dirs.append( p )
+    if xdg:
+        p = os.path.join(xdg, 'jz', 'plugins')
+        if os.path.isdir( p ):
+            plugin_dirs.append( p )
+
+    if plugin_dirs:
+        for d in plugin_dirs:
+            files = path_walk( d, py_module_matcher, config['-strip'] )
+            if files:
+                plugin_files += files
+
+    if plugin_files:
+        load_plugins( plugin_files )
+
+
+def load_plugins(files):
+    """ 
+    a python module is considered a plugin if it is
+    located one level under a plugins directory, i.e.
+    /some/path/plugins/NAME/__init__.py
+    """
+
+    global plugins
+    global pyopt
+    global config
+
+    for f in files:
+        stubs = f.split(os.path.sep)
+        if len(stubs) > 3 and stubs[-3] == 'plugins':
+            try:
+                m = imp.load_source("plugin", f)
+                p = m.get_plugin()
+                plugins[p.URI] = p
+                if 'set_parser' in dir(p):
+                    p.set_parser( pyopt )
+                if 'set_config' in dir(p):
+                    p.set_config( config )
+            except Exception, e:
+                sys.stderr.write("%s" % e)
+                #pass
+
+
+def check_plugin_options():
+    """
+    we are done parsing command line arguments
+    it's time for plugins to inspect results
+    """
+
+    for k in plugins:
+        if 'after_parsing' in dir(plugins[k]):
+            plugins[k].after_parsing(config['xargs'])
+
+
+
 def parse_args( argv ):
     """ parse command line arguments || config file """
     
+    global pyopt
+    global plugins
+
     rest = pyopt.parse( argv )
 
     if pyopt.is_set('-help')   : config['-help']    = True
@@ -318,6 +397,12 @@ def parse_args( argv ):
 
     if rest: config['xargs'] += rest
 
+    # give results to plugins
+    if plugins:
+        for k in plugins:
+            if 'argv_parsed' in dir(plugins[k]):
+                plugins[k].argv_parsed( rest )
+
     pyopt.reset() # reset all options to False or None
 
     return rest
@@ -329,6 +414,9 @@ def parse_config():
     pwd  = os.getcwd()
     xdg  = os.environ.get('XDG_CONFIG_HOME')
     home = os.environ.get('HOME') or os.environ.get('USERPROFILE')
+
+    if not xdg and home:
+        xdg = os.path.join(home, '.config')
 
     cfg_files = []
 
@@ -878,6 +966,7 @@ def jar_matcher(f): return f.endswith('.jar')
 def java_matcher(f): return f.endswith('.java')
 def class_matcher(f): return f.endswith('.class')
 def java_but_no_test(f): return java_matcher(f) and not f.endswith('Test.java')
+def py_module_matcher(f): return f == '__init__.py'
 
 
 # ______________________________________________________________ main
@@ -893,6 +982,8 @@ def main():
 
     # init command line parser
     init_parser()
+    # look for plugins and initialize
+    init_plugins()
     # parse config files; $HOME/.jzrc etc..
     parse_config()
     # parse command line arguments
