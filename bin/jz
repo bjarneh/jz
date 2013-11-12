@@ -129,7 +129,7 @@ config['-name']       = 'a.jar' # -n
 config['-strip']      = '.hg,.git,.svn,.bzr' # -x
 config['-javahome']   = os.environ.get('JAVA_HOME')
 config['-classpath']  = os.environ.get('CLASSPATH')
-config['-link']       = 'http://docs.oracle.com/javase/6/docs/api/' 
+config['-link']       = ['http://docs.oracle.com/javase/6/docs/api/']
 config['windows']     = sys.platform.startswith('win')
 config['xargs']       = []
 
@@ -382,7 +382,7 @@ def parse_args( argv ):
     if pyopt.is_set('-dst'): config['-dst'] = pyopt.get('-dst')
     if pyopt.is_set('-main'): config['-main'] = pyopt.get('-main')
     if pyopt.is_set('-name'): config['-name'] = pyopt.get('-name')
-    if pyopt.is_set('-link'): config['-link'] = pyopt.get('-link')
+    if pyopt.is_set('-link'): config['-link'] = pyopt.get_all('-link')
     if pyopt.is_set('-strip'): config['-strip'] = pyopt.get('-strip')
     if pyopt.is_set('-output'): config['-output'] = pyopt.get('-output')
     if pyopt.is_set('-javahome'): config['-javahome'] = pyopt.get('-javahome')
@@ -718,8 +718,10 @@ def javadoc(files):
     cmd.append(config['-htm'])
     if config['-quiet']:
         cmd.append('-quiet')
-    cmd.append('-link');
-    cmd.append(config['-link'])
+    if config['-link']:
+        for lnk in config['-link']:
+            cmd.append('-link');
+            cmd.append(lnk)
     # assume user knows what he || she is adding
     if config['xargs']: cmd += config['xargs']
     cmd += files
