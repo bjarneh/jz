@@ -342,6 +342,8 @@ def plugin_after_parsing():
     it's time for plugins to inspect results
     """
 
+    global plugins
+
     for k in plugins:
         if 'after_parsing' in dir(plugins[k]):
             plugins[k].after_parsing(config['xargs'])
@@ -353,6 +355,8 @@ def plugin_deps(libs):
     the Lib objects, and the -classpath arguments
     """
 
+    global plugins
+
     for k in plugins:
         if 'set_deps' in dir(plugins[k]):
             plugins[k].set_deps(libs, config['-classpath'])
@@ -360,6 +364,8 @@ def plugin_deps(libs):
 
 def plugin_get_matcher( matcher ):
     """ allow plugins to manipulate the files we look for """
+
+    global plugins
 
     matcher_plugins     = []
     alternative_matcher = matcher
@@ -385,6 +391,8 @@ def plugin_get_matcher( matcher ):
 def plugin_get_files( files ):
     """ allow plugins to manipulate the files after they were chosen """
 
+    global plugins
+
     for k in plugins:
         if 'get_files' in dir(plugins[k]):
             f = plugins[k].get_files(files)
@@ -395,9 +403,13 @@ def plugin_get_files( files ):
 
 def plugin_set_pkgs( pkgs ):
     """ allow plugins to manipulate packages """
+
+    global plugins
+
     for k in plugins:
         if 'set_pkgs' in dir(plugins[k]):
             plugins[k].set_pkgs( pkgs )
+
 
 
 def parse_args( argv ):
@@ -1018,8 +1030,24 @@ def list_settings_exit():
 
 def help_flags_exit():
     """ print usage + flags and exit """
+
+    global plugins
+
     print( __doc__ )
+
+    plugin_flags = []
+
+    for k in plugins:
+        if 'help_flags' in dir(plugins[k]):
+            plugin_flags.append( plugins[k].help_flags() )
+
+    if plugin_flags:
+        print(" plugin options:\n")
+        print('\n'.join(plugin_flags)+ '\n')
+
     print("  NOTE: valid 'javac/javadoc' options can be given\n")
+
+    sys.exit(0)
 
 
 
