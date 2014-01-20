@@ -70,8 +70,6 @@
   -M --manifest :  path to (complete) manifest for the generated jar file
   --classpath   :  locations of user class files and annotation processors
   --javahome    :  location of jdk, or chosen jdk to use to compile src
-
-  NOTE: valid 'javac/javadoc' options can be given
 """
 
 
@@ -101,30 +99,30 @@ __author__     = "bjarneh@ifi.uio.no"
 
 
 config = {} # command line + config-file options
-config['-src']        = 'src' # -S
-config['-obj']        = 'obj' # -O
-config['-htm']        = 'htm' # -H
-config['-res']        = 'res' # -R
-config['-lib']        = 'lib' # -L
-config['-dst']        = 'dst' # -D
-config['-main']       = None  # -m
-config['-manifest']   = None  # -M
-config['-output']     = None  # -o
-config['-nolink']     = False # -N
-config['-full']       = False # -f
-config['-fast']       = False # -F
-config['-pack']       = False # -p
-config['-doc']        = False # -d
-config['-dep']        = False # -u
-config['-clean']      = False # -c
-config['-test']       = False # -t
-config['-help']       = False # -h
-config['-list']       = False # -l
-config['-zlib']       = False # -z
-config['-dryrun']     = False #
-config['-war']        = False # -w
-config['-quiet']      = False # -q
-config['-version']    = False # -v
+config['-src']        = 'src'   # -S
+config['-obj']        = 'obj'   # -O
+config['-htm']        = 'htm'   # -H
+config['-res']        = 'res'   # -R
+config['-lib']        = ['lib'] # -L
+config['-dst']        = 'dst'   # -D
+config['-main']       = None    # -m
+config['-manifest']   = None    # -M
+config['-output']     = None    # -o
+config['-nolink']     = False   # -N
+config['-full']       = False   # -f
+config['-fast']       = False   # -F
+config['-pack']       = False   # -p
+config['-doc']        = False   # -d
+config['-dep']        = False   # -u
+config['-clean']      = False   # -c
+config['-test']       = False   # -t
+config['-help']       = False   # -h
+config['-list']       = False   # -l
+config['-zlib']       = False   # -z
+config['-dryrun']     = False   #
+config['-war']        = False   # -w
+config['-quiet']      = False   # -q
+config['-version']    = False   # -v
 config['-name']       = 'a.jar' # -n
 config['-strip']      = '.hg,.git,.svn,.bzr' # -x
 config['-javahome']   = os.environ.get('JAVA_HOME')
@@ -275,7 +273,7 @@ def init_parser():
     pyopt.add_str_fancy('--classpath')
 
 
-def init_plugins():
+def plugin_init():
     """ look for plugins and initialize """
 
     pwd  = os.getcwd()
@@ -308,14 +306,14 @@ def init_plugins():
                 plugin_files += files
 
     if plugin_files:
-        load_plugins( plugin_files )
+        plugin_load( plugin_files )
 
 
-def load_plugins(files):
+def plugin_load(files):
     """ 
     a python module is considered a plugin if it is
     located one level under a plugins directory, i.e.
-    /some/path/plugins/NAME/__init__.py
+    $A_DIR_IN_PLUGIN_PATH/plugins/NAME/__init__.py
     """
 
     global plugins
@@ -338,7 +336,7 @@ def load_plugins(files):
                 #pass
 
 
-def check_plugin_options():
+def plugin_after_parsing():
     """
     we are done parsing command line arguments
     it's time for plugins to inspect results
@@ -347,7 +345,59 @@ def check_plugin_options():
     for k in plugins:
         if 'after_parsing' in dir(plugins[k]):
             plugins[k].after_parsing(config['xargs'])
+ 
 
+def plugin_deps(libs):
+    """
+    notify plugins about our dependencies, both
+    the Lib objects, and the -classpath arguments
+    """
+
+    for k in plugins:
+        if 'set_deps' in dir(plugins[k]):
+            plugins[k].set_deps(libs, config['-classpath'])
+
+
+def plugin_get_matcher( matcher ):
+    """ allow plugins to manipulate the files we look for """
+
+    matcher_plugins     = []
+    alternative_matcher = matcher
+
+    count = 0
+
+    for k in plugins:
+        if 'get_matcher' in dir(plugins[k]):
+            m = plugins[k].get_matcher()
+            if m:
+                alternative_matcher = m
+                matcher_plugins.append( plugins[k].URI )
+                count += 1
+                if count > 1:
+                    sys.stderr.write("[ERROR] < 1 plugin has a matcher!\n")
+                    for u in matcher_plugins:
+                        sys.stderr.write("  * %s\n"% u)
+                    sys.exit(1)
+
+    return alternative_matcher
+
+
+def plugin_get_files( files ):
+    """ allow plugins to manipulate the files after they were chosen """
+
+    for k in plugins:
+        if 'get_files' in dir(plugins[k]):
+            f = plugins[k].get_files(files)
+            if f:
+                files = f
+    return files
+
+
+def plugin_set_pkgs( pkgs ):
+    """ allow plugins to manipulate packages """
+    for k in plugins:
+        if 'set_pkgs' in dir(plugins[k]):
+            plugins[k].set_pkgs( pkgs )
 
 
 def parse_args( argv ):
@@ -378,7 +428,7 @@ def parse_args( argv ):
     if pyopt.is_set('-obj'): config['-obj'] = pyopt.get('-obj')
     if pyopt.is_set('-htm'): config['-htm'] = pyopt.get('-htm')
     if pyopt.is_set('-res'): config['-res'] = pyopt.get('-res')
-    if pyopt.is_set('-lib'): config['-lib'] = pyopt.get('-lib')
+    if pyopt.is_set('-lib'): config['-lib'] += pyopt.get_all('-lib')
     if pyopt.is_set('-dst'): config['-dst'] = pyopt.get('-dst')
     if pyopt.is_set('-main'): config['-main'] = pyopt.get('-main')
     if pyopt.is_set('-name'): config['-name'] = pyopt.get('-name')
@@ -470,11 +520,12 @@ def build_classpath():
     libs = []
     class_path = []
 
-    if os.path.isdir( config['-lib'] ):
-        jars = path_walk( config['-lib'], jar_matcher, config['-strip'] )
-        for j in jars:
-            libs.append( Lib(j) ) # stuff these into jar for standalone
-            class_path.append( j )
+    for d in config['-lib']:
+        if os.path.isdir( d ):
+            jars = path_walk( d, jar_matcher, config['-strip'] )
+            for j in jars:
+                libs.append( Lib(j) ) # stuff these into jar for standalone
+                class_path.append( j )
 
     if config['-classpath']:
         class_path.append( config['-classpath'] )
@@ -775,12 +826,12 @@ def junit_sanity():
         answ = answ.lower()
         if not answ or answ in ['y', 'yes']:
             print(" Downloading.... junit-4.11.jar\n")
-            dir_or_mkdir( config['-lib'] )
+            dir_or_mkdir( config['-lib'][0] )
             junit_lib = wget("http://bjarneh.at.ifi.uio.no/junit-4.11.jar")
-            fh = open(os.path.join(config['-lib'], 'junit-4.11.jar'), 'w')
+            fh = open(os.path.join(config['-lib'][0], 'junit-4.11.jar'), 'w')
             fh.write( junit_lib )
             fh.close()
-            junit_location = os.path.join( config['-lib'], 'junit-4.11.jar' )
+            junit_location = os.path.join(config['-lib'][0], 'junit-4.11.jar')
             config['-classpath'] += (os.pathsep + junit_location)
         else:
             die(" Ok, goodbye..\n\n")
@@ -932,8 +983,11 @@ def echo_exit(something, status=0):
 
 def normalize_paths():
     """ just make sure we remove added / or // etc"""
-    for e in ['-src','-obj','-htm','-lib','-dst','-res']:
+    for e in ['-src','-obj','-htm','-dst','-res']:
         config[e] = os.path.normpath(config[e])
+    # library paths are contained in a list..
+    for i in xrange(len(config['-lib'])):
+        config['-lib'][i] = os.path.normpath(config['-lib'][i])
 
 
 def expand_variables():
@@ -962,6 +1016,13 @@ def list_settings_exit():
     sys.exit(0)
 
 
+def help_flags_exit():
+    """ print usage + flags and exit """
+    print( __doc__ )
+    print("  NOTE: valid 'javac/javadoc' options can be given\n")
+
+
+
 # lambda filters for the path-walker
 def any_matcher(f): return True
 def jar_matcher(f): return f.endswith('.jar')
@@ -985,7 +1046,7 @@ def main():
     # init command line parser
     init_parser()
     # look for plugins and initialize
-    init_plugins()
+    plugin_init()
     # parse config files; $HOME/.jzrc etc..
     parse_config()
     # parse command line arguments
@@ -994,19 +1055,25 @@ def main():
     normalize_paths()
     # expand shell variables $HOME/$PWD... %USERDIR% etc. on Windows
     expand_variables()
+    # notify plugins that parsing is done with
+    plugin_after_parsing()
     # do simple options [-version,-help,-clean,-list]
     if config['-list']   : list_settings_exit()
-    if config['-help']   : echo_exit( __doc__ )
+    if config['-help']   : help_flags_exit()
     if config['-clean']  : clean()
     if config['-version'] and not config['-doc']:
         echo_exit( __version__ )
     # classpath + create objects for lib/*.jar
     libs = build_classpath()
+    # update plugins with libs and classpath info
+    plugin_deps(libs)
     # we need to do some extra work if we are testing
     if config['-test']:
         matcher = java_matcher # includes *Test.java also
         write_junit_stub()     # include code stub to run tests
         junit_sanity()         # make sure JUnit is in classpath
+    # give the matcher function to the plugins
+    matcher = plugin_get_matcher( matcher )
     # check sanity, i.e. jdk installed (javac/javadoc)
     if config['-doc']:
         jdk_sanity('javadoc.exe' if config['windows'] else 'javadoc')
@@ -1019,10 +1086,14 @@ def main():
             echo_exit("No java files found in: %s"% config['-src'], 1)
         else:
             echo_exit("Directory not found: %s"% config['-src'], 1)
+    # allow plugins to manipulate the files we have fetched
+    files = plugin_get_files( files )
     # create javadoc (+exit) if -doc option was given
     if config['-doc'] : javadoc(files)
     # create Pkg objects from java packages
     pkgs = find_pkgs( files )
+    # allow plugins to manipulate packages
+    plugin_set_pkgs( pkgs )
     # debug option, prints dependency info
     if config['-dep']: dep_info_exit( pkgs )
     # create links from parents to children
