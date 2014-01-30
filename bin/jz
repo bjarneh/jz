@@ -411,6 +411,15 @@ def plugin_set_pkgs( pkgs ):
             plugins[k].set_pkgs( pkgs )
 
 
+def plugin_build_calculated( pkgs ):
+    """ allow plugins to manipulate packages """
+
+    global plugins
+
+    for k in plugins:
+        if 'build_calculated' in dir(plugins[k]):
+            plugins[k].build_calculated( pkgs )
+
 
 def parse_args( argv ):
     """ parse command line arguments || config file """
@@ -837,13 +846,13 @@ def junit_sanity():
         answ = raw_input(" \n JUnit not found, download it? [Y/n]: ")
         answ = answ.lower()
         if not answ or answ in ['y', 'yes']:
-            print(" Downloading.... junit-4.11.jar\n")
+            print(" Downloading.... [v4.10] junit.jar\n")
             dir_or_mkdir( config['-lib'][0] )
-            junit_lib = wget("http://bjarneh.at.ifi.uio.no/junit-4.11.jar")
-            fh = open(os.path.join(config['-lib'][0], 'junit-4.11.jar'), 'w')
+            junit_lib = wget("http://bjarneh.at.ifi.uio.no/junit.jar")
+            fh = open(os.path.join(config['-lib'][0], 'junit.jar'), 'w')
             fh.write( junit_lib )
             fh.close()
-            junit_location = os.path.join(config['-lib'][0], 'junit-4.11.jar')
+            junit_location = os.path.join(config['-lib'][0], 'junit.jar')
             config['-classpath'] += (os.pathsep + junit_location)
         else:
             die(" Ok, goodbye..\n\n")
@@ -1129,6 +1138,8 @@ def main():
         build_dep_graph( pkgs )
     # calculate which packages need to be compiled
     find_outdated_pkgs( pkgs )
+    # notify plugins that dependency graph is built
+    plugin_build_calculated( pkgs )
     # compile outdated packages
     work_done = javac_outdated_pkgs( pkgs )
     # zip classes into jar file
@@ -1540,7 +1551,7 @@ class Pyopt(object):
         """ flags meaning the same point to same option"""
         used = self.in_use(flags)
         if used:
-            sys.stderr.write("[WARNING] '%s' flag already in use"%(used))
+            sys.stderr.write("[WARNING] '%s' flag already in use\n"%(used))
         else:
             for f in flags:
                 self.options[f] = option
