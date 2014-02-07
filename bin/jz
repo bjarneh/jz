@@ -430,7 +430,9 @@ def parse_args( argv ):
     rest = pyopt.parse( argv )
 
     if pyopt.is_set('-help')   : config['-help']    = True
-    if pyopt.is_set('-test')   : config['-test']    = True
+    if pyopt.is_set('-test')   :
+        config['-test']  = True
+        config['-war']   = False # otherwise bad class placement
     if pyopt.is_set('-doc')    : config['-doc']     = True
     if pyopt.is_set('-clean')  : config['-clean']   = True
     if pyopt.is_set('-dryrun') : config['-dryrun']  = True
