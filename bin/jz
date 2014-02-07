@@ -676,18 +676,21 @@ def javac_outdated_pkgs( pkgs ):
     return True
 
 
-def zip_objs( pkgs, done_stuff ):
+def zip_objs( pkgs, libs, done_stuff ):
     """ zip .class files into config['-dst']/config['-name'] """
 
-    zip_it   = True
     jar_file = os.path.join(config['-dst'], config['-name'])
+
+    # always zip and write new manifest if we pack libs
+    if config['-output'] or config['-pack']:
+        done_stuff = True
 
     if os.path.isfile( jar_file ) and not done_stuff:
         jar_mod = os.stat(jar_file).st_mtime
         for k in pkgs:
             t = pkgs[k].latest_class_file(config['-obj'])
             if t > jar_mod:
-                zip_objs( pkgs, True )
+                zip_objs( pkgs, libs, True )
         return None
 
     else:
@@ -695,7 +698,7 @@ def zip_objs( pkgs, done_stuff ):
         dir_or_mkdir(config['-dst'])
         manifest_dir = os.path.join(config['-obj'], 'META-INF')
         dir_or_mkdir(manifest_dir)
-        write_manifest(manifest_dir)
+        write_manifest(manifest_dir, libs)
 
         manifest_path = os.path.join(manifest_dir, 'MANIFEST.MF')
         manifest_zip_path = os.path.join('META-INF','MANIFEST.MF')
@@ -721,7 +724,7 @@ def zip_objs( pkgs, done_stuff ):
         return jar_file
 
 
-def write_manifest(to_dir):
+def write_manifest(to_dir, libs):
     """ write default manifest, or user provided """
 
     mnf = os.path.join(config['-res'], 'META-INF', 'MANIFEST.MF')
@@ -736,6 +739,13 @@ def write_manifest(to_dir):
         fh.write('Manifest-Version: 1.0\n')
         fh.write('JZ-Version: jz 1.0\n')
         fh.write('Created-By: jz 1.0\n')
+        if config['-output'] or config['-pack']:
+            if libs:
+                fh.write('Class-Path: ')
+                # TODO assert we are writing to empty directory
+                p = map(lambda x: os.path.join('lib', x.base()), libs)
+                fh.write(' '.join(p))
+                fh.write('\n')
         if config['-main']:
             fh.write('Main-Class: %s\n'% config['-main'])
         fh.write('\n\n')
@@ -893,6 +903,7 @@ def add_deps( libs ):
 
     jar_name = os.path.join(config['-dst'], config['-name'])
 
+    # don't recompress zip-files perhaps?
     if config['-zlib']:
         jar_fh = zipfile.ZipFile(jar_name, 'a', zipfile.ZIP_DEFLATED)
     else:
@@ -1145,7 +1156,7 @@ def main():
     # compile outdated packages
     work_done = javac_outdated_pkgs( pkgs )
     # zip classes into jar file
-    zip_objs( pkgs, work_done )
+    zip_objs( pkgs, libs, work_done )
     # add files in config['-res'] to jar file
     add_resources()
     # run junit tests if -test option was given
@@ -1307,7 +1318,11 @@ class Lib(object):
     def __repr__(self):
         return self.fname
 
-    def add_to(self, jar_fh):
+    def base(self):
+        """ just an alias: os.path.basename(my.file.name) """
+        return os.path.basename(self.fname)
+
+    def add_to_old(self, jar_fh):
         """ add my files to jar_fh we are not junit """
         base = os.path.basename( self.fname )
         m = junit_regex.match( base )
@@ -1323,6 +1338,12 @@ class Lib(object):
                 b = zip_fh.read(n)
                 jar_fh.writestr(n, b)
         zip_fh.close()
+
+    def add_to(self, jar_fh):
+        """ add this library to the zip|jar file """
+        info("add 2 zip: %s\n", self.base())
+        jar_fh.write(self.fname, os.path.join('lib', self.base()))
+
 
 # ______________________________________________________________ utility
 
