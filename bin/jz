@@ -430,22 +430,22 @@ def parse_args( argv ):
     rest = pyopt.parse( argv )
 
     if pyopt.is_set('-help')   : config['-help']    = True
-    if pyopt.is_set('-test')   :
-        config['-test']  = True
-        config['-war']   = False # otherwise bad class placement
+    if pyopt.is_set('-test')   : config['-test']  = True
     if pyopt.is_set('-doc')    : config['-doc']     = True
     if pyopt.is_set('-clean')  : config['-clean']   = True
     if pyopt.is_set('-dryrun') : config['-dryrun']  = True
     if pyopt.is_set('-version'): config['-version'] = True
     if pyopt.is_set('-quiet')  : config['-quiet']   = True
     if pyopt.is_set('-zlib')   : config['-zlib']    = True
-    if pyopt.is_set('-war')    : config['-war']     = True
     if pyopt.is_set('-dep')    : config['-dep']     = True
     if pyopt.is_set('-list')   : config['-list']    = True
     if pyopt.is_set('-full')   : config['-full']    = True
     if pyopt.is_set('-fast')   : config['-fast']    = True
     if pyopt.is_set('-pack')   : config['-pack']    = True
     if pyopt.is_set('-nolink') : config['-nolink']  = True
+    # do not allow -war target to be true if we are testing
+    if pyopt.is_set('-war')    :
+        config['-war'] = not config['-test']
 
     if pyopt.is_set('-src'): config['-src'] = pyopt.get('-src')
     if pyopt.is_set('-obj'): config['-obj'] = pyopt.get('-obj')
