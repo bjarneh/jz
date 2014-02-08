@@ -61,6 +61,7 @@
   -D --dst      :  path to dir where jar file is placed (default: dst)
   -R --res      :  path to dir which is included in jar-file (default: res)
   -p --pack     :  include dependency libs to produce a stand alone jar
+  -0 --null     :  ignore dependency libs even with -pack or -output
   -w --war      :  put class files under 'WEB-INF/classes' in jar file
   -d --doc      :  produce javadoc for project, with some sane defaults
   -N --nolink   :  do not add '-linksource' argument for javadoc
@@ -119,6 +120,7 @@ config['-test']       = False   # -t
 config['-help']       = False   # -h
 config['-list']       = False   # -l
 config['-zlib']       = False   # -z
+config['-null']       = False   # -0 :-)
 config['-dryrun']     = False   #
 config['-war']        = False   # -w
 config['-quiet']      = False   # -q
@@ -247,6 +249,7 @@ def init_parser():
     pyopt.add_bool('-c -clean --clean clean')
     pyopt.add_bool('-q -quiet --quiet')
     pyopt.add_bool('-z -zlib --zlib')
+    pyopt.add_bool('-0 -null --null')
     pyopt.add_bool('-dryrun --dryrun')
     pyopt.add_bool('-d -doc --doc doc')
     pyopt.add_bool('-u -dep --dep')
@@ -430,13 +433,14 @@ def parse_args( argv ):
     rest = pyopt.parse( argv )
 
     if pyopt.is_set('-help')   : config['-help']    = True
-    if pyopt.is_set('-test')   : config['-test']  = True
+    if pyopt.is_set('-test')   : config['-test']    = True
     if pyopt.is_set('-doc')    : config['-doc']     = True
     if pyopt.is_set('-clean')  : config['-clean']   = True
     if pyopt.is_set('-dryrun') : config['-dryrun']  = True
     if pyopt.is_set('-version'): config['-version'] = True
     if pyopt.is_set('-quiet')  : config['-quiet']   = True
     if pyopt.is_set('-zlib')   : config['-zlib']    = True
+    if pyopt.is_set('-null')   : config['-null']    = True
     if pyopt.is_set('-dep')    : config['-dep']     = True
     if pyopt.is_set('-list')   : config['-list']    = True
     if pyopt.is_set('-full')   : config['-full']    = True
@@ -681,9 +685,8 @@ def zip_objs( pkgs, libs, done_stuff ):
 
     jar_file = os.path.join(config['-dst'], config['-name'])
 
-    # always zip and write new manifest if we pack libs
-    if config['-output'] or config['-pack']:
-        done_stuff = True
+    # always zip and write new manifest with -null target
+    if config['-null']: done_stuff = True
 
     if os.path.isfile( jar_file ) and not done_stuff:
         jar_mod = os.stat(jar_file).st_mtime
@@ -698,7 +701,7 @@ def zip_objs( pkgs, libs, done_stuff ):
         dir_or_mkdir(config['-dst'])
         manifest_dir = os.path.join(config['-obj'], 'META-INF')
         dir_or_mkdir(manifest_dir)
-        write_manifest(manifest_dir, libs)
+        write_manifest(manifest_dir, pkgs, libs)
 
         manifest_path = os.path.join(manifest_dir, 'MANIFEST.MF')
         manifest_zip_path = os.path.join('META-INF','MANIFEST.MF')
@@ -714,8 +717,9 @@ def zip_objs( pkgs, libs, done_stuff ):
         # manifest should be first
         zip_fh.write(manifest_path, manifest_zip_path)
 
+        obj_dir_len = len(config['-obj'])+1
         for f in path_walk(config['-obj'], class_matcher, None):
-            out_name = f[len(config['-obj'])+1:]
+            out_name = f[obj_dir_len:]
             if config['-war']: # special case we are building a war file
                 out_name = os.path.join('WEB-INF','classes',out_name)
             zip_fh.write(f, out_name)
@@ -724,7 +728,7 @@ def zip_objs( pkgs, libs, done_stuff ):
         return jar_file
 
 
-def write_manifest(to_dir, libs):
+def write_manifest(to_dir, pkgs, libs):
     """ write default manifest, or user provided """
 
     mnf = os.path.join(config['-res'], 'META-INF', 'MANIFEST.MF')
@@ -739,13 +743,10 @@ def write_manifest(to_dir, libs):
         fh.write('Manifest-Version: 1.0\n')
         fh.write('JZ-Version: jz 1.0\n')
         fh.write('Created-By: jz 1.0\n')
-        if config['-output'] or config['-pack']:
-            if libs:
-                fh.write('Class-Path: ')
-                # TODO assert we are writing to empty directory
-                p = map(lambda x: os.path.join('lib', x.base()), libs)
-                fh.write(' '.join(p))
-                fh.write('\n')
+        if config['-output'] and not config['-main']:
+            fh.write('Main-Class: %s\n'% assert_main( pkgs ))
+        if libs and config['-null']:
+            fh.write('Class-Path: %s\n'%(' '.join(map(str, libs))))
         if config['-main']:
             fh.write('Main-Class: %s\n'% config['-main'])
         fh.write('\n\n')
@@ -916,6 +917,23 @@ def add_deps( libs ):
 
 
 def assert_main( pkgs ):
+    """ make sure we have a main entry point """
+
+    # start looking yourself
+    entry_points = []
+
+    for k in pkgs:
+        if pkgs[k].entry:
+            entry_points += pkgs[k].entry
+
+    if not entry_points:
+        die("[ERROR] no main function found\n")
+
+    choice  = choose_entry( entry_points )
+    return entry_points[ choice ]
+
+
+def assert_main_old( pkgs ):
     """ make sure we have a main entry point """
 
     # assume user knows how stuff works
@@ -1163,11 +1181,12 @@ def main():
     if config['-test']: junit()
     # add other dependencies to jar
     if config['-output'] or config['-pack']:
-        add_deps(libs)
+        # with -null set we ignore dependencies and just add
+        # class-path ref in MANIFEST (even when -output is given)
+        if not config['-null']: add_deps(libs)
     # produce executable shell/batch script
     if config['-output']:
-        update = assert_main( pkgs )
-        bash_script(update or work_done)
+        bash_script(work_done)
     # only display time if we actually did some work
     if work_done:
         info("time used: %.3f seconds\n", ( time.time() - t0 ))
@@ -1318,11 +1337,14 @@ class Lib(object):
     def __repr__(self):
         return self.fname
 
+    def __str__(self):
+        return self.fname
+
     def base(self):
         """ just an alias: os.path.basename(my.file.name) """
         return os.path.basename(self.fname)
 
-    def add_to_old(self, jar_fh):
+    def add_to(self, jar_fh):
         """ add my files to jar_fh we are not junit """
         base = os.path.basename( self.fname )
         m = junit_regex.match( base )
@@ -1338,11 +1360,6 @@ class Lib(object):
                 b = zip_fh.read(n)
                 jar_fh.writestr(n, b)
         zip_fh.close()
-
-    def add_to(self, jar_fh):
-        """ add this library to the zip|jar file """
-        info("add 2 zip: %s\n", self.base())
-        jar_fh.write(self.fname, os.path.join('lib', self.base()))
 
 
 # ______________________________________________________________ utility
