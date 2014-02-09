@@ -685,9 +685,6 @@ def zip_objs( pkgs, libs, done_stuff ):
 
     jar_file = os.path.join(config['-dst'], config['-name'])
 
-    # always zip and write new manifest with -null target
-    if config['-null']: done_stuff = True
-
     if os.path.isfile( jar_file ) and not done_stuff:
         jar_mod = os.stat(jar_file).st_mtime
         for k in pkgs:
@@ -744,7 +741,7 @@ def write_manifest(to_dir, pkgs, libs):
         fh.write('JZ-Version: jz 1.0\n')
         fh.write('Created-By: jz 1.0\n')
         if config['-output'] and not config['-main']:
-            fh.write('Main-Class: %s\n'% assert_main( pkgs ))
+            config['-main'] = assert_main( pkgs )
         if libs and config['-null']:
             fh.write('Class-Path: %s\n'%(' '.join(map(str, libs))))
         if config['-main']:
@@ -933,6 +930,8 @@ def assert_main( pkgs ):
     return entry_points[ choice ]
 
 
+#TODO this is not used, but something similar should
+#     be done, i.e. avoid re-packing if nothing changed
 def assert_main_old( pkgs ):
     """ make sure we have a main entry point """
 
@@ -1173,8 +1172,10 @@ def main():
     plugin_build_calculated( pkgs )
     # compile outdated packages
     work_done = javac_outdated_pkgs( pkgs )
+    # always zip and write new manifest with -null target
+    if config['-null']: work_done = True
     # zip classes into jar file
-    zip_objs( pkgs, libs, work_done )
+    zip_objs( pkgs, libs, work_done or config['-output'] )
     # add files in config['-res'] to jar file
     add_resources()
     # run junit tests if -test option was given
