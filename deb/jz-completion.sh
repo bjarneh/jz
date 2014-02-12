@@ -91,6 +91,7 @@ _jz(){
              -notimestamp
              -notree
              -nowarn
+             -null
              -obj
              -output
              -overview
@@ -125,6 +126,7 @@ _jz(){
              -version
              -Werror
              -windowtitle
+             -web
              -Xdocrootparent
              -zlib"
 
