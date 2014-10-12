@@ -743,7 +743,7 @@ def write_manifest(to_dir, pkgs, libs):
         if config['-output'] and not config['-main']:
             config['-main'] = assert_main( pkgs )
         if libs and config['-null']:
-            fh.write('Class-Path: %s\n'%(' '.join(map(str, libs))))
+            fh.write('Class-Path: %s\n'%(' \n '.join(map(str, libs))))
         if config['-main']:
             fh.write('Main-Class: %s\n'% config['-main'])
         fh.write('\n\n')
