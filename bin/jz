@@ -1091,11 +1091,11 @@ def help_flags_exit():
 
 
 # lambda filters for the path-walker
-def any_matcher(f): return True
-def jar_matcher(f): return f.endswith('.jar')
-def java_matcher(f): return f.endswith('.java')
-def class_matcher(f): return f.endswith('.class')
-def java_but_no_test(f): return java_matcher(f) and not f.endswith('Test.java')
+def any_matcher(f):       return True
+def jar_matcher(f):       return f.endswith('.jar')
+def java_matcher(f):      return f.endswith('.java')
+def class_matcher(f):     return f.endswith('.class')
+def java_but_no_test(f):  return java_matcher(f) and not f.endswith('Test.java')
 def py_module_matcher(f): return f == '__init__.py'
 
 
@@ -1161,13 +1161,16 @@ def main():
     pkgs = find_pkgs( files )
     # allow plugins to manipulate packages
     plugin_set_pkgs( pkgs )
-    # debug option, prints dependency info
-    if config['-dep']: dep_info_exit( pkgs )
+
+    # here
+
     # create links from parents to children
     if not config['-fast']:
         build_dep_graph( pkgs )
     # calculate which packages need to be compiled
     find_outdated_pkgs( pkgs )
+    # debug option, prints dependency info
+    if config['-dep']: dep_info_exit( pkgs )
     # notify plugins that dependency graph is built
     plugin_build_calculated( pkgs )
     # compile outdated packages
@@ -1266,7 +1269,14 @@ class Pkg(object):
             root = os.path.join(obj_root, self.name.replace('.', os.sep))
 
         for f in self.files:
-            f_class = os.path.basename(f)[:-5] + '.class'
+            # ignore package-info.java since these only
+            # contain info; i.e. we cannot expect to find
+            # a compiled class called package-info.class
+            # after compilation
+            base_name = os.path.basename(f)
+            if 'package-info.java' == base_name:
+                continue
+            f_class = base_name[:-5] + '.class'
             f_path  = os.path.join(root, f_class)
             if os.path.isfile( f_path ):
                 java_mod  = os.stat(f).st_mtime
@@ -1315,7 +1325,8 @@ class Pkg(object):
 
     def info(self):
         """ print some info about myself """
-        print('\npkg\n   %s'% self.name)
+        ok = '*' if self.make else ''
+        print('\npkg%s\n   %s'% (ok,self.name))
         print('fls')
         for f in self.files:
             print('   %s'% f)
