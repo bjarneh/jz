@@ -229,7 +229,7 @@ function pathfind() {
 
 pathfind "java" || die "[ERROR] could not find: java in \$PATH"
 
-exec java -jar $0 "$@"
+exec java $JAVA_OPTS -jar $0 "$@"
             
 
 
