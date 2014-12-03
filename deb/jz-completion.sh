@@ -80,6 +80,7 @@ _jz(){
              -main
              -manifest
              -name
+             -istest
              -nocomment
              -nodeprecated
              -nodeprecatedlist
