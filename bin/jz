@@ -462,6 +462,7 @@ def parse_args( argv ):
     if pyopt.is_set('-dst'): config['-dst'] = pyopt.get('-dst')
     if pyopt.is_set('-main'): config['-main'] = pyopt.get('-main')
     if pyopt.is_set('-name'): config['-name'] = pyopt.get('-name')
+    if pyopt.is_set('-istest'): config['-istest'] = pyopt.get('-istest')
     if pyopt.is_set('-link'): config['-link'] = pyopt.get_all('-link')
     if pyopt.is_set('-strip'): config['-strip'] = pyopt.get('-strip')
     if pyopt.is_set('-output'): config['-output'] = pyopt.get('-output')
