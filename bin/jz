@@ -54,6 +54,7 @@
   -F --fast     :  compile project as fast as possible (only modified files)
   -c --clean    :  remove class-files, jar-file, and javadoc html
   -t --test     :  run unit-tests using junit (will be downloaded)
+  -i --istest   :  regex to match test classes (default: ^.*Test\\\.class$)
   -S --src      :  path to a source root (default: src)
   -O --obj      :  path to produced class-files (default: obj)
   -H --htm      :  path to produced javadoc (default: htm)
@@ -126,6 +127,7 @@ config['-war']        = False   # -w
 config['-quiet']      = False   # -q
 config['-version']    = False   # -v
 config['-name']       = 'a.jar' # -n
+config['-istest']     = '^.*Test\\\.class$' # -i
 config['-strip']      = '.hg,.git,.svn,.bzr' # -x
 config['-javahome']   = os.environ.get('JAVA_HOME')
 config['-classpath']  = os.environ.get('CLASSPATH')
@@ -181,7 +183,7 @@ public class JzTestRunner {
             JarFile jf = new JarFile(jarfile);
             for (Enumeration<JarEntry> e = jf.entries(); e.hasMoreElements();) {
                 String name = e.nextElement().getName();
-                if (name.endsWith("Test.class") && !name.contains("$")){
+                if (name.matches("[:REGEX:]") && !name.contains("$")) {
                         tests.add(name.replaceAll(File.separator, ".")
                             .substring(0, name.length() - 6));
                 }
@@ -269,6 +271,7 @@ def init_parser():
     pyopt.add_str_fancy('-D --dst')
     pyopt.add_str_fancy('-M --main')
     pyopt.add_str_fancy('-n --name')
+    pyopt.add_str_fancy('-i --istest')
     pyopt.add_str_fancy('-m --manifest')
     pyopt.add_str_fancy('--link')
     pyopt.add_str_fancy('-o --output')
@@ -822,7 +825,7 @@ def write_junit_stub():
     atexit.register( rm_junit_template, test_file, None )
 
     fd = open(test_file, 'w')
-    fd.write(junit_template)
+    fd.write(junit_template.replace('[:REGEX:]',config['-istest']))
     fd.close()
 
 
