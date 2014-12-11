@@ -689,44 +689,38 @@ def zip_objs( pkgs, libs, done_stuff ):
 
     jar_file = os.path.join(config['-dst'], config['-name'])
 
-    if os.path.isfile( jar_file ) and not done_stuff:
-        jar_mod = os.stat(jar_file).st_mtime
-        for k in pkgs:
-            t = pkgs[k].latest_class_file(config['-obj'])
-            if t > jar_mod:
-                zip_objs( pkgs, libs, True )
-        return None
+    # zip does not overwrite entries, it adds, avoid the mess
+    if os.path.isfile( jar_file ):
+        os.unlink( jar_file )
 
+    dir_or_mkdir(config['-dst'])
+    manifest_dir = os.path.join(config['-obj'], 'META-INF')
+    dir_or_mkdir(manifest_dir)
+    write_manifest(manifest_dir, pkgs, libs)
+
+    manifest_path = os.path.join(manifest_dir, 'MANIFEST.MF')
+    manifest_zip_path = os.path.join('META-INF','MANIFEST.MF')
+
+    info("zip it up: %s\n"% jar_file)
+
+    # the zip/jar archive
+    if config['-zlib']:
+        zip_fh = zipfile.ZipFile(jar_file, 'w', zipfile.ZIP_DEFLATED)
     else:
+        zip_fh = zipfile.ZipFile(jar_file, 'w')
 
-        dir_or_mkdir(config['-dst'])
-        manifest_dir = os.path.join(config['-obj'], 'META-INF')
-        dir_or_mkdir(manifest_dir)
-        write_manifest(manifest_dir, pkgs, libs)
+    # manifest should be first
+    zip_fh.write(manifest_path, manifest_zip_path)
 
-        manifest_path = os.path.join(manifest_dir, 'MANIFEST.MF')
-        manifest_zip_path = os.path.join('META-INF','MANIFEST.MF')
+    obj_dir_len = len(config['-obj'])+1
+    for f in path_walk(config['-obj'], class_matcher, None):
+        out_name = f[obj_dir_len:]
+        if config['-war']: # special case we are building a war file
+            out_name = os.path.join('WEB-INF','classes',out_name)
+        zip_fh.write(f, out_name)
+    zip_fh.close()
 
-        info("zip it up: %s\n"% jar_file)
-
-        # the zip/jar archive
-        if config['-zlib']:
-            zip_fh = zipfile.ZipFile(jar_file, 'w', zipfile.ZIP_DEFLATED)
-        else:
-            zip_fh = zipfile.ZipFile(jar_file, 'w')
-
-        # manifest should be first
-        zip_fh.write(manifest_path, manifest_zip_path)
-
-        obj_dir_len = len(config['-obj'])+1
-        for f in path_walk(config['-obj'], class_matcher, None):
-            out_name = f[obj_dir_len:]
-            if config['-war']: # special case we are building a war file
-                out_name = os.path.join('WEB-INF','classes',out_name)
-            zip_fh.write(f, out_name)
-        zip_fh.close()
-
-        return jar_file
+    return jar_file
 
 
 def write_manifest(to_dir, pkgs, libs):
