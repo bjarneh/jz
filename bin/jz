@@ -1037,6 +1037,8 @@ def normalize_paths():
     # library paths are contained in a list..
     for i in xrange(len(config['-lib'])):
         config['-lib'][i] = os.path.normpath(config['-lib'][i])
+    # remove duplicates
+    config['-lib'] = list( set( config['-lib'] ) )
 
 
 def expand_variables():
