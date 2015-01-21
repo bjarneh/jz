@@ -710,9 +710,9 @@ def zip_objs( pkgs, libs, done_stuff ):
         zip_fh = zipfile.ZipFile(jar_file, 'w')
 
     # manifest should be first
+    zip_fh.write(manifest_path, manifest_zip_path)
     zip_fh.write(os.path.dirname(manifest_path), 
                  os.path.dirname(manifest_zip_path))
-    zip_fh.write(manifest_path, manifest_zip_path)
 
     dirs = set();
 
@@ -770,8 +770,15 @@ def add_resources():
 
     info("add 2 zip: %s\n"% config['-res'])
 
+    dirs = set();
+
     for f in path_walk(config['-res'], any_matcher, config['-strip']):
-        jar_fh.write(f, f[len(config['-res'])+1:])
+        out_name = f[len(config['-res'])+1:]
+        d = os.path.dirname( out_name )
+        if d and (not d in dirs):
+            dirs.add( d )
+            jar_fh.write(os.path.dirname(f), d)
+        jar_fh.write(f, out_name)
 
     jar_fh.close()
 
