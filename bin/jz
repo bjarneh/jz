@@ -710,11 +710,19 @@ def zip_objs( pkgs, libs, done_stuff ):
         zip_fh = zipfile.ZipFile(jar_file, 'w')
 
     # manifest should be first
+    zip_fh.write(os.path.dirname(manifest_path), 
+                 os.path.dirname(manifest_zip_path))
     zip_fh.write(manifest_path, manifest_zip_path)
+
+    dirs = set();
 
     obj_dir_len = len(config['-obj'])+1
     for f in path_walk(config['-obj'], class_matcher, None):
         out_name = f[obj_dir_len:]
+        d = os.path.dirname( out_name )
+        if not d in dirs:
+            dirs.add( d )
+            zip_fh.write(os.path.dirname(f), d)
         if config['-war']: # special case we are building a war file
             out_name = os.path.join('WEB-INF','classes',out_name)
         zip_fh.write(f, out_name)
