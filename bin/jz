@@ -715,20 +715,24 @@ def zip_objs( pkgs, libs, done_stuff ):
                  os.path.dirname(manifest_zip_path))
 
     dirs = set();
+
+    if config['-war']:
+        dir_or_mkdir(os.path.join(config['-obj'],'WEB-INF','classes'))
  
     obj_dir_len = len(config['-obj'])+1
     for f in path_walk(config['-obj'], any_matcher, None):
         out_name = f[obj_dir_len:]
+        if config['-war'] and class_matcher(f): # special case we are building a war file
+            out_name = os.path.join('WEB-INF','classes',out_name)
         if f == manifest_path: continue
         t2 = os.path.dirname( out_name )
         t1 = f
         while t2 and (not t2 in dirs):
             t1 = os.path.dirname(t1)
-            zip_fh.write(t1, t2)
+            if t1:
+                zip_fh.write(t1, t2)
             dirs.add(t2)
             t2 = os.path.dirname(t2)
-        if config['-war']: # special case we are building a war file
-            out_name = os.path.join('WEB-INF','classes',out_name)
         zip_fh.write(f, out_name)
     zip_fh.close()
 
