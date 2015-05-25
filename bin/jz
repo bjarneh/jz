@@ -269,10 +269,10 @@ def init_parser():
     pyopt.add_str_fancy('-R --res')
     pyopt.add_str_fancy('-L --lib')
     pyopt.add_str_fancy('-D --dst')
-    pyopt.add_str_fancy('-M --main')
+    pyopt.add_str_fancy('-m --main')
     pyopt.add_str_fancy('-n --name')
     pyopt.add_str_fancy('-i --istest')
-    pyopt.add_str_fancy('-m --manifest')
+    pyopt.add_str_fancy('-M --manifest')
     pyopt.add_str_fancy('--link')
     pyopt.add_str_fancy('-o --output')
     pyopt.add_str_fancy('--javahome')
@@ -715,14 +715,18 @@ def zip_objs( pkgs, libs, done_stuff ):
                  os.path.dirname(manifest_zip_path))
 
     dirs = set();
-
+ 
     obj_dir_len = len(config['-obj'])+1
-    for f in path_walk(config['-obj'], class_matcher, None):
+    for f in path_walk(config['-obj'], any_matcher, None):
         out_name = f[obj_dir_len:]
-        d = os.path.dirname( out_name )
-        if not d in dirs:
-            dirs.add( d )
-            zip_fh.write(os.path.dirname(f), d)
+        if f == manifest_path: continue
+        t2 = os.path.dirname( out_name )
+        t1 = f
+        while t2 and (not t2 in dirs):
+            t1 = os.path.dirname(t1)
+            zip_fh.write(t1, t2)
+            dirs.add(t2)
+            t2 = os.path.dirname(t2)
         if config['-war']: # special case we are building a war file
             out_name = os.path.join('WEB-INF','classes',out_name)
         zip_fh.write(f, out_name)
@@ -757,6 +761,16 @@ def write_manifest(to_dir, pkgs, libs):
 
 
 def add_resources():
+    """ add everything in config['-res'] to config['-obj'] """
+
+    if not os.path.isdir(config['-res']): return
+
+    from distutils.dir_util import copy_tree
+    copy_tree(config['-res'], config['-obj'])
+
+
+#TODO remove this
+def add_resources_old():
     """ add everything in config['-res'] to jar """
 
     if not os.path.isdir(config['-res']): return
@@ -777,7 +791,10 @@ def add_resources():
         d = os.path.dirname( out_name )
         if d and (not d in dirs):
             dirs.add( d )
-            jar_fh.write(os.path.dirname(f), d)
+            dn = os.path.dirname(f)
+            # HACK
+            if not dn.endswith('META-INF'):
+                jar_fh.write(dn, d)
         jar_fh.write(f, out_name)
 
     jar_fh.close()
@@ -1192,10 +1209,10 @@ def main():
     work_done = javac_outdated_pkgs( pkgs )
     # always zip and write new manifest with -null target
     if config['-null']: work_done = True
+    # add files in config['-res'] to config['-obj']
+    add_resources()
     # zip classes into jar file
     zip_objs( pkgs, libs, work_done or config['-output'] )
-    # add files in config['-res'] to jar file
-    add_resources()
     # run junit tests if -test option was given
     if config['-test']: junit()
     # add other dependencies to jar
