@@ -54,7 +54,8 @@
   -F --fast     :  compile project as fast as possible (only modified files)
   -c --clean    :  remove class-files, jar-file, and javadoc html
   -t --test     :  run unit-tests using junit (will be downloaded)
-  -i --istest   :  regex to match test classes (default: ^.*Test\\\.class$)
+  -i --istest   :  Java regex to match test classes (default: ^.*Test\\\\\.class$)
+  -T --testlib  :  regex to match test libs (default: ^.*junit[\d\-\.]*\.jar$)
   -S --src      :  path to a source root (default: src)
   -O --obj      :  path to produced class-files (default: obj)
   -H --htm      :  path to produced javadoc (default: htm)
@@ -128,6 +129,7 @@ config['-quiet']      = False   # -q
 config['-version']    = False   # -v
 config['-name']       = 'a.jar' # -n
 config['-istest']     = '^.*Test\\\.class$' # -i
+config['-testlib']    = None # -T if this is something we recompile
 config['-strip']      = '.hg,.git,.svn,.bzr' # -x
 config['-javahome']   = os.environ.get('JAVA_HOME')
 config['-classpath']  = os.environ.get('CLASSPATH')
@@ -149,7 +151,7 @@ main_start  = r"""public\s+static\s+void\s+main\s*\(\s*String"""
 main_stop   = r"""(\[\]\s+arg(s|v)|\s+arg(v|s)\[\]|\s*\.\.\.\s+arg(s|v))\s*\)"""
 main_regex  = re.compile(main_start + main_stop)
 # regexp to look for junit library
-junit_regex = re.compile(r"""junit[\d\-.]*\.jar""")
+junit_regex = re.compile(r"""^.*junit[\d\-.]*\.jar$""")
 
 # command line parser
 pyopt = None
@@ -272,6 +274,7 @@ def init_parser():
     pyopt.add_str_fancy('-m --main')
     pyopt.add_str_fancy('-n --name')
     pyopt.add_str_fancy('-i --istest')
+    pyopt.add_str_fancy('-T --testlib')
     pyopt.add_str_fancy('-M --manifest')
     pyopt.add_str_fancy('--link')
     pyopt.add_str_fancy('-o --output')
@@ -463,6 +466,9 @@ def parse_args( argv ):
     if pyopt.is_set('-main'): config['-main'] = pyopt.get('-main')
     if pyopt.is_set('-name'): config['-name'] = pyopt.get('-name')
     if pyopt.is_set('-istest'): config['-istest'] = pyopt.get('-istest')
+    if pyopt.is_set('-testlib'):
+        config['-testlib'] = pyopt.get('-testlib')
+        junit_regex = re.compile(config['-testlib'])
     if pyopt.is_set('-link'): config['-link'] = pyopt.get_all('-link')
     if pyopt.is_set('-strip'): config['-strip'] = pyopt.get('-strip')
     if pyopt.is_set('-output'): config['-output'] = pyopt.get('-output')
@@ -1404,9 +1410,11 @@ class Lib(object):
             # add class files + any other file which is not
             # a MANIFEST.MF file, some libs have important
             # files stuffed into them (mysql.jar for instance)
-            if not os.path.basename(n) == 'MANIFEST.MF':
-                b = zip_fh.read(n)
-                jar_fh.writestr(n, b)
+            if os.path.basename(n) == 'MANIFEST.MF' or\
+               os.path.dirname(n) == 'META-INF':
+                continue
+            b = zip_fh.read(n)
+            jar_fh.writestr(n, b)
         zip_fh.close()
 
 
