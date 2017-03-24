@@ -55,7 +55,7 @@
   -c --clean    :  remove class-files, jar-file, and javadoc html
   -t --test     :  run unit-tests using junit (will be downloaded)
   -i --istest   :  Java regex to match test classes (default: ^.*Test\\\\\.class$)
-  -T --testlib  :  regex to match test libs (default: ^.*junit[\d\-\.]*\.jar$)
+  -T --testlib  :  regex to match test libs (^(junit|hamcrest*)[\d\-\.]*\.jar$)
   -S --src      :  path to a source root (default: src)
   -O --obj      :  path to produced class-files (default: obj)
   -H --htm      :  path to produced javadoc (default: htm)
@@ -129,7 +129,7 @@ config['-quiet']      = False   # -q
 config['-version']    = False   # -v
 config['-name']       = 'a.jar' # -n
 config['-istest']     = '^.*Test\\\.class$' # -i
-config['-testlib']    = None # -T if this is something we recompile
+config['-testlib']    = r'^.*(hamcrest-core|junit).*\.jar$' # -T
 config['-strip']      = '.hg,.git,.svn,.bzr' # -x
 config['-javahome']   = os.environ.get('JAVA_HOME')
 config['-classpath']  = os.environ.get('CLASSPATH')
@@ -151,7 +151,9 @@ main_start  = r"""public\s+static\s+void\s+main\s*\(\s*String"""
 main_stop   = r"""(\[\]\s+arg(s|v)|\s+arg(v|s)\[\]|\s*\.\.\.\s+arg(s|v))\s*\)"""
 main_regex  = re.compile(main_start + main_stop)
 # regexp to look for junit library
-junit_regex = re.compile(r"""^.*junit[\d\-.]*\.jar$""")
+junit_regex = re.compile(config['-testlib'])
+# regexp to classify a Java file as a Test class
+java_test   = re.compile(config['-istest'])
 
 # command line parser
 pyopt = None
@@ -186,7 +188,7 @@ public class JzTestRunner {
             for (Enumeration<JarEntry> e = jf.entries(); e.hasMoreElements();) {
                 String name = e.nextElement().getName();
                 if (name.matches("[:REGEX:]") && !name.contains("$")) {
-                        tests.add(name.replaceAll(File.separator, ".")
+                        tests.add(name.replaceAll("/", ".")
                             .substring(0, name.length() - 6));
                 }
             }
@@ -435,6 +437,8 @@ def parse_args( argv ):
     
     global pyopt
     global plugins
+    global junit_regex
+    global java_test
 
     rest = pyopt.parse( argv )
 
@@ -465,10 +469,13 @@ def parse_args( argv ):
     if pyopt.is_set('-dst'): config['-dst'] = pyopt.get('-dst')
     if pyopt.is_set('-main'): config['-main'] = pyopt.get('-main')
     if pyopt.is_set('-name'): config['-name'] = pyopt.get('-name')
-    if pyopt.is_set('-istest'): config['-istest'] = pyopt.get('-istest')
+    if pyopt.is_set('-istest'):
+        config['-istest'] = pyopt.get('-istest')
+        java_test = re.compile(config['-istest'])
     if pyopt.is_set('-testlib'):
         config['-testlib'] = pyopt.get('-testlib')
         junit_regex = re.compile(config['-testlib'])
+
     if pyopt.is_set('-link'): config['-link'] = pyopt.get_all('-link')
     if pyopt.is_set('-strip'): config['-strip'] = pyopt.get('-strip')
     if pyopt.is_set('-output'): config['-output'] = pyopt.get('-output')
@@ -721,6 +728,7 @@ def zip_objs( pkgs, libs, done_stuff ):
                  os.path.dirname(manifest_zip_path))
 
     dirs = set();
+    dirs.add('META-INF');
 
     if config['-war']:
         dir_or_mkdir(os.path.join(config['-obj'],'WEB-INF','classes'))
@@ -735,7 +743,7 @@ def zip_objs( pkgs, libs, done_stuff ):
         t1 = f
         while t2 and (not t2 in dirs):
             t1 = os.path.dirname(t1)
-            if t1:
+            if t1 and not t1 in dirs:
                 zip_fh.write(t1, t2)
             dirs.add(t2)
             t2 = os.path.dirname(t2)
@@ -876,21 +884,24 @@ def rm_junit_template(fname, arg=None):
 def junit_sanity():
     """ look for the existence of junit in -classpath """
 
+    global junit_regex
+
     paths = config['-classpath'].split(os.pathsep)
 
     found        = False
-    looking_for  = os.sep.join(['org','junit','runner','JUnitCore'])
-    looking_for += '.class'
+    looking_for  = 'org/junit/runner/JUnitCore.class'
 
     for p in paths:
         # we should ideally check for version of junit, but well...
-        if p.find('junit') != -1 and p.endswith('.jar'):
+        if junit_regex.match(p):
             zip_fh = zipfile.ZipFile(p, 'r')
             files  = zip_fh.namelist()
             zip_fh.close()
             if looking_for in files:
                 found = True
                 break
+##         else:
+##             print "no match for: ", p
 
     if not found:
         answ = raw_input(" \n JUnit not found, download it? [Y/n]: ")
@@ -947,8 +958,9 @@ def add_deps( libs ):
     else:
         jar_fh = zipfile.ZipFile(jar_name, 'a')
 
+    current = set(jar_fh.namelist())
     for lib in libs:
-        lib.add_to( jar_fh )
+        lib.add_to( jar_fh, current )
 
     jar_fh.close()
 
@@ -1137,7 +1149,7 @@ def any_matcher(f):       return True
 def jar_matcher(f):       return f.endswith('.jar')
 def java_matcher(f):      return f.endswith('.java')
 def class_matcher(f):     return f.endswith('.class')
-def java_but_no_test(f):  return java_matcher(f) and not f.endswith('Test.java')
+def java_but_no_test(f):  return java_matcher(f) and not java_test.match(f.replace('.java', '.class'))
 def py_module_matcher(f): return f == '__init__.py'
 
 
@@ -1398,8 +1410,9 @@ class Lib(object):
         """ just an alias: os.path.basename(my.file.name) """
         return os.path.basename(self.fname)
 
-    def add_to(self, jar_fh):
+    def add_to(self, jar_fh, already_here):
         """ add my files to jar_fh we are not junit """
+        global junit_regex
         base = os.path.basename( self.fname )
         m = junit_regex.match( base )
         if m: return  # skip junit
@@ -1407,6 +1420,10 @@ class Lib(object):
         info("add 2 zip: %s\n",self.fname)
         names  = zip_fh.namelist()
         for n in names:
+            if n in already_here:
+                continue
+            else:
+                already_here.add(n)
             # add class files + any other file which is not
             # a MANIFEST.MF file, some libs have important
             # files stuffed into them (mysql.jar for instance)
