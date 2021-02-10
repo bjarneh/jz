@@ -59,7 +59,7 @@
   -S --src      :  path to a source root (default: src)
   -O --obj      :  path to produced class-files (default: obj)
   -H --htm      :  path to produced javadoc (default: htm)
-  -L --lib      :  path to library dir added to -classpath (default: lib)
+  -L --lib      :  path to library dir; added to -classpath (default: lib/main)
   -D --dst      :  path to dir where jar file is placed (default: dst)
   -R --res      :  path to dir which is included in jar-file (default: res)
   -p --pack     :  include dependency libs to produce a stand alone jar
@@ -106,7 +106,7 @@ config['-src']        = 'src'   # -S
 config['-obj']        = 'obj'   # -O
 config['-htm']        = 'htm'   # -H
 config['-res']        = 'res'   # -R
-config['-lib']        = [os.path.join('lib','test')] # -L
+config['-lib']        = [os.path.join('lib','main')] # -L
 config['-dst']        = 'dst'   # -D
 config['-main']       = None    # -m
 config['-manifest']   = None    # -M
@@ -128,7 +128,7 @@ config['-war']        = False   # -w
 config['-quiet']      = False   # -q
 config['-version']    = False   # -v
 config['-name']       = 'a.jar' # -n
-config['-istest']     = r"""^.*Test\.class$""" # -i
+config['-istest']     = """^.*Test\\.class$""" # -i
 config['-testlib']    = r"""^.*(hamcrest-core|junit).*\.jar$""" # -T
 config['-strip']      = """.hg,.git,.svn,.bzr""" # -x
 config['-javahome']   = os.environ.get('JAVA_HOME')
@@ -870,8 +870,14 @@ def write_junit_stub():
     atexit.register( rm_junit_template, test_file, None )
 
     fd = open(test_file, 'w')
-    fd.write(junit_template.replace('[:REGEX:]',config['-istest']))
+    fd.write(junit_template.replace('[:REGEX:]', java_esc(config['-istest'])))
     fd.close()
+
+
+def java_esc(s):
+    """ Escape regex to be used in Java source"""
+    tokens = s.split("\\")
+    return r"\\".join(tokens)
 
 
 def rm_junit_template(fname, arg=None):
@@ -907,12 +913,12 @@ def junit_sanity():
         answ = answ.lower()
         if not answ or answ in ['y', 'yes']:
             print(" Downloading.... [v4.10] junit.jar\n")
-            dir_or_mkdir( config['-lib'][0] )
+            dir_or_mkdir( config['-lib'][-1] )
             junit_lib = wget("https://raw.githubusercontent.com/bjarneh/jz/master/lib/junit.jar")
-            fh = open(os.path.join(config['-lib'][0], 'junit.jar'), 'w')
+            fh = open(os.path.join(config['-lib'][-1], 'junit.jar'), 'w+b')
             fh.write( junit_lib )
             fh.close()
-            junit_location = os.path.join(config['-lib'][0], 'junit.jar')
+            junit_location = os.path.join(config['-lib'][-1], 'junit.jar')
             config['-classpath'] += (os.pathsep + junit_location)
         else:
             die(" Ok, goodbye..\n\n")
@@ -1190,6 +1196,8 @@ def main():
     # we need to do some extra work if we are testing
     if config['-test']:
         matcher = java_matcher # includes *Test.java also
+        test_lib = os.path.join('lib','test')
+        config['-lib'].append(test_lib)
         write_junit_stub()     # include code stub to run tests
         junit_sanity()         # make sure JUnit is in classpath
     # give the matcher function to the plugins
