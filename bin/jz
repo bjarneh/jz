@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- encoding: utf-8 -*-
 # ______________________________________________________________________
 #
@@ -106,7 +106,7 @@ config['-src']        = 'src'   # -S
 config['-obj']        = 'obj'   # -O
 config['-htm']        = 'htm'   # -H
 config['-res']        = 'res'   # -R
-config['-lib']        = ['lib'] # -L
+config['-lib']        = [os.path.join('lib','test')] # -L
 config['-dst']        = 'dst'   # -D
 config['-main']       = None    # -m
 config['-manifest']   = None    # -M
@@ -128,7 +128,7 @@ config['-war']        = False   # -w
 config['-quiet']      = False   # -q
 config['-version']    = False   # -v
 config['-name']       = 'a.jar' # -n
-config['-istest']     = """^.*Test\\\.class$""" # -i
+config['-istest']     = r"""^.*Test\.class$""" # -i
 config['-testlib']    = r"""^.*(hamcrest-core|junit).*\.jar$""" # -T
 config['-strip']      = """.hg,.git,.svn,.bzr""" # -x
 config['-javahome']   = os.environ.get('JAVA_HOME')
@@ -342,7 +342,7 @@ def plugin_load(files):
                     p.set_parser( pyopt )
                 if 'set_config' in dir(p):
                     p.set_config( config )
-            except Exception, e:
+            except Exception as e:
                 sys.stderr.write("%s" % e)
                 #pass
 
@@ -900,16 +900,15 @@ def junit_sanity():
             if looking_for in files:
                 found = True
                 break
-##         else:
-##             print "no match for: ", p
 
     if not found:
-        answ = raw_input(" \n JUnit not found, download it? [Y/n]: ")
+        answ = input(" \n JUnit not found, download it? [Y/n]: ")
+        print(answ)
         answ = answ.lower()
         if not answ or answ in ['y', 'yes']:
             print(" Downloading.... [v4.10] junit.jar\n")
             dir_or_mkdir( config['-lib'][0] )
-            junit_lib = wget("http://bjarneh.at.ifi.uio.no/junit.jar")
+            junit_lib = wget("https://raw.githubusercontent.com/bjarneh/jz/master/lib/junit.jar")
             fh = open(os.path.join(config['-lib'][0], 'junit.jar'), 'w')
             fh.write( junit_lib )
             fh.close()
@@ -1035,11 +1034,11 @@ def choose_entry( choices ):
 
     print("\nYou have not chosen an entry point (Main-Class)\n")
     for i, e in enumerate(choices):
-        print(" %2d - %s"%( i, e ))
-    entry  = raw_input("\nType your choice >  ")
+        print((" %2d - %s"%( i, e )))
+    entry  = input("\nType your choice >  ")
     print('')
     ientry = int(entry)
-    if ientry not in range(0, len(choices)):
+    if ientry not in list(range(0, len(choices))):
         raise Exception(" %d : not in range"% ientry)
     return ientry
 
@@ -1060,12 +1059,12 @@ def bash_script(work_was_done):
 
     info("shell/jar: %s\n", config['-output'])
     fh_bash = open(config['-output'], 'w+b')
-    fh_bash.write(bash_template)
+    fh_bash.write(bash_template.encode())
     fh_jar = open(jar_name, 'r+b')
     fh_bash.write(fh_jar.read())
     fh_jar.close()
     fh_bash.close()
-    os.chmod(config['-output'], 0755)
+    os.chmod(config['-output'], 0o755)
 
 
 def info(fmt, *args):
@@ -1089,7 +1088,7 @@ def normalize_paths():
     for e in ['-src','-obj','-htm','-dst','-res']:
         config[e] = os.path.normpath(config[e])
     # library paths are contained in a list..
-    for i in xrange(len(config['-lib'])):
+    for i in range(len(config['-lib'])):
         config['-lib'][i] = os.path.normpath(config['-lib'][i])
     # remove duplicates
     config['-lib'] = list( set( config['-lib'] ) )
@@ -1098,7 +1097,7 @@ def normalize_paths():
 def expand_variables():
     """ expand shell variables + HOME shortcut tilde [~] """
     for k in config:
-        if config[k] and isinstance(config[k], basestring):
+        if config[k] and isinstance(config[k], str):
             config[k] = os.path.expanduser(config[k])
             config[k] = os.path.expandvars(config[k])
 
@@ -1116,7 +1115,7 @@ def list_settings_exit():
     print("\n Options and their content:\n")
     for k in config:
         if k.startswith("-"):
-            print("%12s => %s"%(k, config[k]))
+            print(("%12s => %s"%(k, config[k])))
     print("")
     sys.exit(0)
 
@@ -1136,7 +1135,7 @@ def help_flags_exit():
 
     if plugin_flags:
         print(" plugin options:\n")
-        print('\n'.join(plugin_flags)+ '\n')
+        print(('\n'.join(plugin_flags)+ '\n'))
 
     print("  NOTE: valid 'javac/javadoc' options can be given\n")
 
@@ -1380,17 +1379,17 @@ class Pkg(object):
     def info(self):
         """ print some info about myself """
         ok = '*' if self.make else ''
-        print('\npkg%s\n   %s'% (ok,self.name))
+        print(('\npkg%s\n   %s'% (ok,self.name)))
         print('fls')
         for f in self.files:
-            print('   %s'% f)
+            print(('   %s'% f))
         print('dep')
         for d in self.deps:
-            print('   %s'% d)
+            print(('   %s'% d))
         if self.entry:
             print('haz')
             for e in self.entry:
-                print('   %s'% e)
+                print(('   %s'% e))
         print('')
 
 # ______________________________________________________________ Lib
@@ -1534,7 +1533,7 @@ def which(executable):
         if os.access (executable, os.X_OK):
             return executable
 
-    if not os.environ.has_key('PATH') or os.environ['PATH'] == '':
+    if 'PATH' not in os.environ or os.environ['PATH'] == '':
         p = os.defpath
     else:
         p = os.environ['PATH']
@@ -1577,9 +1576,9 @@ def config_to_argv(fname):
 
 def wget(link, HEADERS={}):
     """ fetch a resource over HTTP """
-    import urllib2 # adds 10-20ms, hide it here ☻
-    r = urllib2.Request( link, None, HEADERS )
-    return urllib2.urlopen(r).read()
+    import urllib.request, urllib.error, urllib.parse # adds 10-20ms, hide it here ☻
+    r = urllib.request.Request( link, None, HEADERS )
+    return urllib.request.urlopen(r).read()
 
 
 # ______________________________________________________________ Pyopt
@@ -1713,7 +1712,7 @@ class Pyopt(object):
         return self.options[flag].get_all()
 
     def is_option(self, opt):
-        return opt in self.options.keys()
+        return opt in list(self.options.keys())
 
     def parse(self, argv):
         rest = []
@@ -1763,7 +1762,7 @@ class Pyopt(object):
         """
         max = 0
         tmp = ""
-        for k in self.options.keys():
+        for k in list(self.options.keys()):
             if arg.startswith(k):
                 if type(self.options[k]) == StrOption:
                     if len(k) > max:
@@ -1775,7 +1774,7 @@ class Pyopt(object):
         return False
 
     def __str__(self):
-        return '\n'.join(map(lambda x: x.__str__(), set(self.options.values())))
+        return '\n'.join([x.__str__() for x in set(self.options.values())])
 
 # ______________________________________________________________ init
 
@@ -1783,7 +1782,7 @@ if __name__ == '__main__':
     try:
         #cProfile.run("main()")
         main()
-    except Exception, inst:
+    except Exception as inst:
         traceback.print_exc()
         sys.stderr.write("%s\n"% inst)
         
