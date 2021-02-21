@@ -81,7 +81,7 @@
 import os         # os independent?
 import re         # parse with regexp
 import sys        # printing/argv/exit
-import imp        # import dynamic modules
+import importlib  # import dynamic modules
 import time       # do some basic timing
 import atexit     # delete tmp files on exit
 #import urllib2   # moved to 'wget' [adds overhead]
@@ -335,7 +335,8 @@ def plugin_load(files):
         stubs = f.split(os.path.sep)
         if len(stubs) > 3 and stubs[-3] == 'plugins':
             try:
-                m = imp.load_source("plugin", f)
+                l = importlib.machinery.SourceFileLoader("plugin", f)
+                m = l.load_module()
                 p = m.get_plugin()
                 plugins[p.URI] = p
                 if 'set_parser' in dir(p):
