@@ -400,14 +400,14 @@ def plugin_get_matcher( matcher ):
     return alternative_matcher
 
 
-def plugin_set_files( files ):
+def plugin_get_files( files ):
     """ allow plugins to manipulate the files after they were chosen """
 
     global plugins
 
     for k in plugins:
-        if 'set_files' in dir(plugins[k]):
-            f = plugins[k].set_files(files)
+        if 'get_files' in dir(plugins[k]):
+            f = plugins[k].get_files(files)
             if f:
                 files = f
     return files
@@ -1216,7 +1216,7 @@ def main():
         else:
             echo_exit("Directory not found: %s"% config['-src'], 1)
     # allow plugins to manipulate the files we have fetched
-    files = plugin_set_files( files )
+    files = plugin_get_files( files )
     # create javadoc (+exit) if -doc option was given
     if config['-doc'] : javadoc(files)
     # create Pkg objects from java packages
