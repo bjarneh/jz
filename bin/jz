@@ -331,21 +331,22 @@ def plugin_load(files):
     global pyopt
     global config
 
-    for f in files:
-        stubs = f.split(os.path.sep)
-        if len(stubs) > 3 and stubs[-3] == 'plugins':
-            try:
-                l = importlib.machinery.SourceFileLoader("plugin", f)
-                m = l.load_module()
-                p = m.get_plugin()
-                plugins[p.URI] = p
-                if 'set_parser' in dir(p):
-                    p.set_parser( pyopt )
-                if 'set_config' in dir(p):
-                    p.set_config( config )
-            except Exception as e:
-                sys.stderr.write("%s" % e)
-                #pass
+    if 'machinery' in dir(importlib):
+        for f in files:
+            stubs = f.split(os.path.sep)
+            if len(stubs) > 3 and stubs[-3] == 'plugins':
+                try:
+                    l = importlib.machinery.SourceFileLoader("plugin", f)
+                    m = l.load_module()
+                    p = m.get_plugin()
+                    plugins[p.URI] = p
+                    if 'set_parser' in dir(p):
+                        p.set_parser( pyopt )
+                    if 'set_config' in dir(p):
+                        p.set_config( config )
+                except Exception as e:
+                    sys.stderr.write("%s" % e)
+                    #pass
 
 
 def plugin_after_parsing():
@@ -784,8 +785,13 @@ def add_resources():
 
     if not os.path.isdir(config['-res']): return
 
-    from distutils.dir_util import copy_tree
-    copy_tree(config['-res'], config['-obj'])
+    if sys.version_info > (3,8):
+        import shutil
+        shutil.copytree(config['-res'], config['-obj'], dirs_exist_ok=True)
+    else:
+        from distutils.dir_util import copy_tree
+        copy_tree(config['-res'], config['-obj'])
+
 
 
 #TODO remove this
