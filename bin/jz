@@ -59,7 +59,7 @@
   -S --src      :  path to a source root (default: src)
   -O --obj      :  path to produced class-files (default: obj)
   -H --htm      :  path to produced javadoc (default: htm)
-  -L --lib      :  path to library dir; added to -classpath (default: lib/main)
+  -L --lib      :  path to library dir; added to -classpath (default: lib)
   -D --dst      :  path to dir where jar file is placed (default: dst)
   -R --res      :  path to dir which is included in jar-file (default: res)
   -p --pack     :  include dependency libs to produce a stand alone jar
@@ -106,7 +106,7 @@ config['-src']        = 'src'   # -S
 config['-obj']        = 'obj'   # -O
 config['-htm']        = 'htm'   # -H
 config['-res']        = 'res'   # -R
-config['-lib']        = [os.path.join('lib','main')] # -L
+config['-lib']        = ['lib'] # -L
 config['-dst']        = 'dst'   # -D
 config['-main']       = None    # -m
 config['-manifest']   = None    # -M
@@ -330,6 +330,8 @@ def plugin_load(files):
     global plugins
     global pyopt
     global config
+
+    #print('\n'.join(dir(importlib)))
 
     if 'machinery' in dir(importlib):
         for f in files:
@@ -566,7 +568,11 @@ def build_classpath():
     libs = []
     class_path = []
 
+    test_libs = os.path.join('lib','test')
+
     for d in config['-lib']:
+        if not config['-test'] and d == test_libs:
+            continue
         if os.path.isdir( d ):
             jars = path_walk( d, jar_matcher, config['-strip'] )
             for j in jars:
