@@ -73,22 +73,24 @@
   -M --manifest :  path to (complete) manifest for the generated jar file
   --classpath   :  locations of user class files and annotation processors
   --javahome    :  location of jdk, or chosen jdk to use to compile src
+  --maven-deps  :  import dependencies from Maven pom.xml script
 """
 
 
 # ______________________________________________________________ imports
 
-import os         # os independent?
-import re         # parse with regexp
-import sys        # printing/argv/exit
-import importlib  # import dynamic modules
-import time       # do some basic timing
-import atexit     # delete tmp files on exit
-#import urllib2   # moved to 'wget' [adds overhead]
-import zipfile    # write zip (jar) files
-#import cProfile  # run profile tool
-import traceback  # print stacktrace
-import subprocess # run external commands
+import os              # os independent?
+import re              # parse with regexp
+import sys             # printing/argv/exit
+import importlib       # import dynamic modules
+import time            # do some basic timing
+import atexit          # delete tmp files on exit
+#import urllib2        # moved to 'wget' [adds overhead]
+import zipfile         # write zip (jar) files
+#import cProfile       # run profile tool
+import traceback       # print stacktrace
+import subprocess      # run external commands
+import xml.sax.handler # parse pom.xml
 
 # ______________________________________________________________ globals
 
@@ -134,6 +136,7 @@ config['-strip']      = """.hg,.git,.svn,.bzr""" # -x
 config['-javahome']   = os.environ.get('JAVA_HOME')
 config['-classpath']  = os.environ.get('CLASSPATH')
 config['-link']       = ['http://docs.oracle.com/javase/6/docs/api/']
+config['-maven-deps'] = False
 config['windows']     = sys.platform.startswith('win')
 config['xargs']       = []
 
@@ -266,6 +269,7 @@ def init_parser():
     pyopt.add_bool('-p -pack --pack')
     pyopt.add_bool('-N -nolink --nolink')
     pyopt.add_bool('-t -test --test test')
+    pyopt.add_bool('-maven-deps --maven-deps --mvn -mvn')
     pyopt.add_str_fancy('-x --strip')
     pyopt.add_str_fancy('-S --src')
     pyopt.add_str_fancy('-O --obj')
@@ -446,21 +450,22 @@ def parse_args( argv ):
 
     rest = pyopt.parse( argv )
 
-    if pyopt.is_set('-help')   : config['-help']    = True
-    if pyopt.is_set('-test')   : config['-test']    = True
-    if pyopt.is_set('-doc')    : config['-doc']     = True
-    if pyopt.is_set('-clean')  : config['-clean']   = True
-    if pyopt.is_set('-dryrun') : config['-dryrun']  = True
-    if pyopt.is_set('-version'): config['-version'] = True
-    if pyopt.is_set('-quiet')  : config['-quiet']   = True
-    if pyopt.is_set('-zlib')   : config['-zlib']    = True
-    if pyopt.is_set('-null')   : config['-null']    = True
-    if pyopt.is_set('-dep')    : config['-dep']     = True
-    if pyopt.is_set('-list')   : config['-list']    = True
-    if pyopt.is_set('-full')   : config['-full']    = True
-    if pyopt.is_set('-fast')   : config['-fast']    = True
-    if pyopt.is_set('-pack')   : config['-pack']    = True
-    if pyopt.is_set('-nolink') : config['-nolink']  = True
+    if pyopt.is_set('-help')      : config['-help']       = True
+    if pyopt.is_set('-test')      : config['-test']       = True
+    if pyopt.is_set('-doc')       : config['-doc']        = True
+    if pyopt.is_set('-clean')     : config['-clean']      = True
+    if pyopt.is_set('-dryrun')    : config['-dryrun']     = True
+    if pyopt.is_set('-version')   : config['-version']    = True
+    if pyopt.is_set('-quiet')     : config['-quiet']      = True
+    if pyopt.is_set('-zlib')      : config['-zlib']       = True
+    if pyopt.is_set('-null')      : config['-null']       = True
+    if pyopt.is_set('-dep')       : config['-dep']        = True
+    if pyopt.is_set('-list')      : config['-list']       = True
+    if pyopt.is_set('-full')      : config['-full']       = True
+    if pyopt.is_set('-fast')      : config['-fast']       = True
+    if pyopt.is_set('-pack')      : config['-pack']       = True
+    if pyopt.is_set('-nolink')    : config['-nolink']     = True
+    if pyopt.is_set('-maven-deps'): config['-maven-deps'] = True
     # do not allow -war target to be true if we are testing
     if pyopt.is_set('-war')    :
         config['-war'] = not config['-test']
@@ -1162,6 +1167,21 @@ def help_flags_exit():
 
 
 
+def maven_import_exit():
+    """ import libs from Maven pom.xml and exit """
+
+    global plugins
+
+    parse_pom_xml()
+
+    sys.exit(0)
+
+
+
+
+
+
+
 # lambda filters for the path-walker
 def any_matcher(f):       return True
 def jar_matcher(f):       return f.endswith('.jar')
@@ -1200,6 +1220,7 @@ def main():
     if config['-list']   : list_settings_exit()
     if config['-help']   : help_flags_exit()
     if config['-clean']  : clean()
+    if config['-maven-deps'] : maven_import_exit()
     if config['-version'] and not config['-doc']:
         echo_exit( __version__ )
     # classpath + create objects for lib/*.jar
@@ -1270,7 +1291,98 @@ def main():
         info("time used: %.3f seconds\n", ( time.time() - t0 ))
 
 
+# ______________________________________________________________ Mvn
+
+
+class MvnTargetHandler(xml.sax.handler.ContentHandler):
+    """ Extract library info from Maven / pom.xml build script """
+    
+    def __init__(self):
+        self.state = None
+        self.take = False
+        self.variables = {}
+
+        self.dep = {}
+        self.reg_deps = []
+        self.tst_deps = []
+        self.tokens = None
+
+    def startElement(self, name, attr):
+        if self.state:
+            self.take = True
+            return
+        if name == 'properties': self.state = 'IN_PROPERTIES'
+        if name == 'dependency': self.state = 'IN_DEPENDENCY'
+
+
+    def endElement(self, name):
+        if self.state == 'IN_PROPERTIES' and self.take:
+            self.variables[name] = self.tokens
+        if self.state == 'IN_DEPENDENCY' and self.take:
+            self.dep[name] = self.tokens
+        if self.state and self.take:
+            self.tokens = None
+            self.take = False
+
+        if name == 'dependency':
+            if self.dep.get('scope') and self.dep.get('scope') == 'test':
+                self.tst_deps.append(self.dep)
+            else:
+                self.reg_deps.append(self.dep)
+            self.dep = {}
+
+        if name in ['properties','dependency']:
+            self.state = None
+
+
+
+    def characters(self, content):
+        if self.take:
+            self.tokens = content
+    
+
+    def expand_variables(self):
+        for h in self.reg_deps + self.tst_deps:
+            for k in h:
+                v = h[k]
+                if v and len(v) > 3 and v[0:2] == '${' and v[-1] == '}':
+                    if v[2:-1] in self.variables:
+                        h[k] = self.variables[v[2:-1]]
+
+
+    def out_currnode(self, name):
+        if self.state:
+            print("name: {}, state: {}".format(name, self.state))
+
+
+    def __str__(self):
+        return """
+         MvnTargetHandler:
+            variables: {} 
+            reg_deps : {}
+            tst_deps : {}
+        """.format(self.variables,
+                   self.reg_deps,
+                   self.tst_deps)
+                   
+
+
+def parse_pom_xml(fname='pom.xml'):
+    """ Return dependencies from pom.xml"""
+    if os.path.isfile(fname):
+        parser  = xml.sax.make_parser()
+        handler = MvnTargetHandler()
+        parser.setContentHandler( handler )
+        parser.parse(fname)
+        handler.expand_variables()
+        print(handler)
+        return handler
+    else:
+        raise FileNotFoundError(fname)
+
+
 # ______________________________________________________________ Pkg
+
 
 class Pkg(object):
     """
