@@ -1170,14 +1170,33 @@ def help_flags_exit():
 def maven_import_exit():
     """ import libs from Maven pom.xml and exit """
 
-    global plugins
+    handler = parse_pom_xml()
 
-    parse_pom_xml()
+    if handler.reg_deps:
+        dir_or_mkdir( 'lib' )
+        for d in handler.get_regular_dls():
+            print("[r]: {}".format(d))
+            _wget_mvn_lib(d, 'lib')
+
+    if handler.tst_deps:
+        test_dir = os.path.join('lib','test') 
+        dir_or_mkdir( test_dir )
+        for d in handler.get_test_dls():
+            print("[t]: {}".format(d))
+            _wget_mvn_lib(d, test_dir)
 
     sys.exit(0)
 
 
 
+def _wget_mvn_lib(mvn_jar, to_dir):
+    """ Download files from Mavn repository """
+    jar_name = mvn_jar[mvn_jar.rindex('/') + 1:]
+    full_path = os.path.join(to_dir, jar_name)
+    jar_bytes = wget(mvn_jar)
+    fh = open(full_path, 'w+b')
+    fh.write( jar_bytes )
+    fh.close()
 
 
 
@@ -1295,17 +1314,24 @@ def main():
 
 
 class MvnTargetHandler(xml.sax.handler.ContentHandler):
-    """ Extract library info from Maven / pom.xml build script """
+    """ Extract library info from Maven / pom.xml build script.
+        
+        This is not how anyone parses XML in Python anymore it
+        seems (SAX), but it somehow beats reading documentation on
+        how I should be parsing XML in Python, even though it is
+        quite bad in terms of readability etc.
+    """
     
     def __init__(self):
         self.state = None
         self.take = False
-        self.variables = {}
-
         self.dep = {}
+
+        self.variables = {}
         self.reg_deps = []
         self.tst_deps = []
         self.tokens = None
+
 
     def startElement(self, name, attr):
         if self.state:
@@ -1335,13 +1361,14 @@ class MvnTargetHandler(xml.sax.handler.ContentHandler):
             self.state = None
 
 
-
     def characters(self, content):
+        """ Store content of xml node"""
         if self.take:
             self.tokens = content
     
 
     def expand_variables(self):
+        """ Allow 'properties' variables to expand for other values"""
         for h in self.reg_deps + self.tst_deps:
             for k in h:
                 v = h[k]
@@ -1351,11 +1378,40 @@ class MvnTargetHandler(xml.sax.handler.ContentHandler):
 
 
     def out_currnode(self, name):
+        """ Debug print statement"""
         if self.state:
             print("name: {}, state: {}".format(name, self.state))
 
 
+    def get_regular_dls(self, repo='https://repo1.maven.org/maven2'):
+        """ Return download URL's for regular dependencies"""
+        return self._get_dls(self.reg_deps, repo)
+
+    def get_test_dls(self, repo='https://repo1.maven.org/maven2'):
+        """ Return download URL's for test dependencies"""
+        return self._get_dls(self.tst_deps, repo)
+
+
+    # {'groupId': 'org.checkerframework', 'artifactId': 'checker-qual', 'version': '3.21.2'}
+    # https://repo1.maven.org/maven2/org/checkerframework/checker-qual/3.42.0/checker-qual-3.42.0.jar
+    def _get_dls(self, dps, repo):
+        dls = []
+        if dps:
+            for d in dps:
+                u = "{}/{}/{}/{}/{}-{}.jar".format(
+                    repo,
+                    d['groupId'].replace('.','/'),
+                    d['artifactId'],
+                    d['version'],
+                    d['artifactId'],
+                    d['version'])
+                dls.append(u)
+        return dls
+
+
+
     def __str__(self):
+        """ Debug print statement"""
         return """
          MvnTargetHandler:
             variables: {} 
@@ -1375,7 +1431,7 @@ def parse_pom_xml(fname='pom.xml'):
         parser.setContentHandler( handler )
         parser.parse(fname)
         handler.expand_variables()
-        print(handler)
+        #print(handler)
         return handler
     else:
         raise FileNotFoundError(fname)
