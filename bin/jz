@@ -1376,6 +1376,12 @@ class MvnTargetHandler(xml.sax.handler.ContentHandler):
                     if v[2:-1] in self.variables:
                         h[k] = self.variables[v[2:-1]]
 
+    def clean_versions(self):
+        """ Do not allow [1.1,) version numbering"""
+        for h in self.reg_deps + self.tst_deps:
+            if 'version' in h:
+                h['version'] = ''.join(i for i in h['version'] if i.isdigit() or i == '.')
+
 
     def out_currnode(self, name):
         """ Debug print statement"""
@@ -1431,6 +1437,7 @@ def parse_pom_xml(fname='pom.xml'):
         parser.setContentHandler( handler )
         parser.parse(fname)
         handler.expand_variables()
+        handler.clean_versions()
         #print(handler)
         return handler
     else:
