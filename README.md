@@ -1,18 +1,9 @@
 # Java build tool
 
 This is a somewhat old project (12+ years now in 2024) but it can still be
-somewhat useful I think. It started out when I had a Java project that used
-[Maven][1] as its build tool. It took around **3 seconds** to compile the entire
-project on my laptop, but Maven used around **9 seconds** to report something like this:
+somewhat useful I think. 
 
-*"Nothing to compile - all classes are up to date"*.
-
-So the first version of this build tool was pretty much this:
-
-     javac -d obj -sourcepath src -cp $CLASSPATH $(find src -name '*.java')
-
-But it did evolve a bit, but not much from that first starting point. The
-main idea was to make a small build tool that was the direct opposite of Maven.
+The main idea was to make a small build tool that was the direct opposite of Maven.
 
  * No configuration required
  * Be small (1 file), easy to include with projects

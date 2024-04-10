@@ -73,9 +73,10 @@
   -M --manifest :  path to (complete) manifest for the generated jar file
   --classpath   :  locations of user class files and annotation processors
   --javahome    :  location of jdk, or chosen jdk to use to compile src
-  --maven-deps  :  import dependencies from Maven pom.xml script
 """
-
+ 
+# Hide until it's at least half way finished
+#--maven-deps  :  import dependencies from Maven pom.xml script
 
 # ______________________________________________________________ imports
 
