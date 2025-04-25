@@ -37,7 +37,7 @@
 # ______________________________________________________________________
 
 
-"""
+r"""
  jz - java compilation, testing, zipping etc.
 
  usage: jz [OPTIONS]
@@ -216,7 +216,22 @@ public class JzTestRunner {
 }
 """
 
-bash_template = """#!/bin/bash
+both_template = r"""#!/usr/bin/env sh
+
+@ 2>/dev/null # 2>nul & echo off & goto BOF
+:
+exec java $JAVA_OPTS -jar "$0" "$@"
+exit
+
+:BOF
+@echo off
+java %JAVA_OPTS% -jar "%~dpnx0" %*
+exit /B %errorlevel%
+
+
+"""
+
+bash_template = r"""#!/bin/bash
 
 function die() {
     echo "$1"
@@ -1084,7 +1099,8 @@ def bash_script(work_was_done):
 
     info("shell/jar: %s\n", config['-output'])
     fh_bash = open(config['-output'], 'w+b')
-    fh_bash.write(bash_template.encode())
+    #fh_bash.write(bash_template.encode())
+    fh_bash.write(both_template.encode())
     fh_jar = open(jar_name, 'r+b')
     fh_bash.write(fh_jar.read())
     fh_jar.close()
